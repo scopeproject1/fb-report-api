@@ -3,5 +3,5 @@ uvicorn
 pydantic
 pandas
 openpyxl
-requests
 python-multipart
+reportlab
