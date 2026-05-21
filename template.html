@@ -5,9 +5,7 @@
 <style>
 @page { size: A4; margin: 0; }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
@@ -19,7 +17,7 @@ body {
 .page {
   width: 210mm;
   min-height: 297mm;
-  padding: 22mm;
+  padding: 20mm;
   page-break-after: always;
 }
 
@@ -32,7 +30,7 @@ body {
 }
 
 .cover h1 {
-  font-size: 42px;
+  font-size: 40px;
   line-height: 1.15;
   margin: 0;
 }
@@ -43,35 +41,29 @@ body {
   color: #d1d5db;
 }
 
-.small {
-  color: #6b7280;
-  font-size: 12px;
-}
-
-.cover .small {
-  color: #d1d5db;
-}
+.small { color: #6b7280; font-size: 12px; }
+.cover .small { color: #d1d5db; }
 
 h2 {
-  font-size: 28px;
-  margin: 0 0 22px;
+  font-size: 27px;
+  margin: 0 0 20px;
 }
 
 h3 {
-  font-size: 18px;
-  margin: 0 0 12px;
+  font-size: 17px;
+  margin: 0 0 10px;
 }
 
 .grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
+  gap: 13px;
 }
 
 .kpi {
   background: #f3f4f6;
   border-radius: 18px;
-  padding: 18px;
+  padding: 17px;
 }
 
 .kpi .label {
@@ -81,7 +73,7 @@ h3 {
 }
 
 .kpi .value {
-  font-size: 26px;
+  font-size: 25px;
   font-weight: 800;
 }
 
@@ -97,12 +89,12 @@ h3 {
 
 .card {
   display: grid;
-  grid-template-columns: 34% 66%;
-  gap: 18px;
+  grid-template-columns: 33% 67%;
+  gap: 16px;
   background: #f8fafc;
   border-radius: 22px;
-  padding: 18px;
-  margin-bottom: 18px;
+  padding: 16px;
+  margin-bottom: 16px;
   break-inside: avoid;
 }
 
@@ -110,57 +102,57 @@ h3 {
   background: linear-gradient(160deg, #111827, #374151);
   color: white;
   border-radius: 18px;
-  padding: 16px;
-  min-height: 190px;
+  padding: 15px;
+  min-height: 200px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
 
 .visual .id {
-  font-size: 36px;
+  font-size: 34px;
   font-weight: 900;
 }
 
 .visual .type {
-  font-size: 11px;
+  font-size: 10px;
   color: #d1d5db;
 }
 
 .visual .name {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1.35;
 }
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
 }
 
 .metric {
   background: white;
   border-radius: 12px;
-  padding: 10px;
+  padding: 9px;
 }
 
 .metric .label {
-  font-size: 10px;
+  font-size: 9px;
   color: #6b7280;
 }
 
 .metric .value {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 800;
   margin-top: 4px;
 }
 
 .meta {
-  margin-top: 14px;
-  font-size: 11px;
+  margin-top: 12px;
+  font-size: 10.5px;
   color: #4b5563;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .table-row {
@@ -179,6 +171,20 @@ h3 {
   color: white;
   font-size: 11px;
   margin-bottom: 12px;
+}
+
+.note {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.section-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+  margin: 16px 0 8px;
 }
 </style>
 </head>
@@ -205,8 +211,17 @@ h3 {
     <div class="kpi"><div class="label">Impressions</div><div class="value">{{ num(totals.impressions) }}</div></div>
     <div class="kpi"><div class="label">Results</div><div class="value">{{ num(totals.results) }}</div></div>
     <div class="kpi"><div class="label">Average CPR</div><div class="value">{{ money(totals.avg_cpr) }}</div></div>
-    <div class="kpi"><div class="label">Creatives Analyzed</div><div class="value">{{ totals.creative_count }}</div></div>
+    <div class="kpi"><div class="label">Average CPM</div><div class="value">{{ money(totals.avg_cpm) }}</div></div>
+    <div class="kpi"><div class="label">Frequency</div><div class="value">{{ totals.avg_frequency or "-" }}</div></div>
+    <div class="kpi"><div class="label">Unique Creatives</div><div class="value">{{ totals.creative_count }}</div></div>
+    <div class="kpi"><div class="label">Raw Rows Parsed</div><div class="value">{{ totals.raw_rows }}</div></div>
+    <div class="kpi"><div class="label">ROAS</div><div class="value">{{ totals.roas or "-" }}</div></div>
   </div>
+
+  <p class="note">
+    Raw Meta Ads rows are aggregated into unique creatives by Ad name + Campaign name + Page name.
+    Age/gender/day rows are not treated as separate posts.
+  </p>
 </section>
 
 <section class="page">
@@ -216,12 +231,14 @@ h3 {
 
 <section class="page">
   <h2>Top Performing Creatives</h2>
+  <p class="note">Sorted by total results after aggregating all age/gender/day rows into one creative.</p>
+
   {% for c in top_creatives %}
   <div class="card">
     <div class="visual">
       <div>
         <div class="id">#{{ "%02d"|format(loop.index) }}</div>
-        <div class="type">Generated Creative Visual ID</div>
+        <div class="type">Top Creative</div>
       </div>
       <div class="name">{{ c.ad_name }}</div>
     </div>
@@ -233,11 +250,16 @@ h3 {
         <div class="metric"><div class="label">Impressions</div><div class="value">{{ num(c.impressions) }}</div></div>
         <div class="metric"><div class="label">Spend</div><div class="value">{{ money(c.spent) }}</div></div>
         <div class="metric"><div class="label">CPR</div><div class="value">{{ money(c.cpr) }}</div></div>
-        <div class="metric"><div class="label">Result Type</div><div class="value">{{ c.result_type }}</div></div>
+        <div class="metric"><div class="label">CPM</div><div class="value">{{ money(c.cpm) }}</div></div>
+        <div class="metric"><div class="label">Frequency</div><div class="value">{{ c.frequency or "-" }}</div></div>
+        <div class="metric"><div class="label">Best Age</div><div class="value">{{ c.best_age.name }}</div></div>
+        <div class="metric"><div class="label">Best Gender</div><div class="value">{{ c.best_gender.name }}</div></div>
       </div>
       <div class="meta">
         Page: {{ c.page_name }}<br>
-        Campaign: {{ c.campaign_name }}
+        Campaign: {{ c.campaign_name }}<br>
+        Result type: {{ c.result_type }}<br>
+        Raw rows merged: {{ c.raw_rows }}
       </div>
     </div>
   </div>
@@ -245,7 +267,11 @@ h3 {
 </section>
 
 <section class="page">
-  <h2>Weak / High-Cost Creatives</h2>
+  <h2>Weak / Inefficient Creatives</h2>
+  <p class="note">
+    First priority: creatives with spend but zero results. If none exist, highest CPR creatives are shown.
+  </p>
+
   {% for c in weak_creatives %}
   <div class="card">
     <div class="visual">
@@ -261,11 +287,15 @@ h3 {
         <div class="metric"><div class="label">Results</div><div class="value">{{ num(c.results) }}</div></div>
         <div class="metric"><div class="label">Spend</div><div class="value">{{ money(c.spent) }}</div></div>
         <div class="metric"><div class="label">CPR</div><div class="value">{{ money(c.cpr) }}</div></div>
+        <div class="metric"><div class="label">Reach</div><div class="value">{{ num(c.reach) }}</div></div>
         <div class="metric"><div class="label">Impressions</div><div class="value">{{ num(c.impressions) }}</div></div>
+        <div class="metric"><div class="label">Frequency</div><div class="value">{{ c.frequency or "-" }}</div></div>
       </div>
       <div class="meta">
         Campaign: {{ c.campaign_name }}<br>
-        Result type: {{ c.result_type }}
+        Result type: {{ c.result_type }}<br>
+        Best segment: {{ c.best_gender.name }} / {{ c.best_age.name }}<br>
+        Raw rows merged: {{ c.raw_rows }}
       </div>
     </div>
   </div>
@@ -306,6 +336,10 @@ h3 {
 
 <section class="page">
   <h2>All Creative Cards</h2>
+  <p class="note">
+    Every card below represents one aggregated creative/post, not one raw Excel row.
+  </p>
+
   {% for c in creatives %}
   <div class="card">
     <div class="visual">
@@ -323,9 +357,17 @@ h3 {
         <div class="metric"><div class="label">Impressions</div><div class="value">{{ num(c.impressions) }}</div></div>
         <div class="metric"><div class="label">Spend</div><div class="value">{{ money(c.spent) }}</div></div>
         <div class="metric"><div class="label">CPR</div><div class="value">{{ money(c.cpr) }}</div></div>
-        <div class="metric"><div class="label">Page</div><div class="value">{{ c.page_name }}</div></div>
+        <div class="metric"><div class="label">CPM</div><div class="value">{{ money(c.cpm) }}</div></div>
+        <div class="metric"><div class="label">Frequency</div><div class="value">{{ c.frequency or "-" }}</div></div>
+        <div class="metric"><div class="label">Best Age</div><div class="value">{{ c.best_age.name }}</div></div>
+        <div class="metric"><div class="label">Best Gender</div><div class="value">{{ c.best_gender.name }}</div></div>
       </div>
-      <div class="meta">Campaign: {{ c.campaign_name }}</div>
+      <div class="meta">
+        Page: {{ c.page_name }}<br>
+        Campaign: {{ c.campaign_name }}<br>
+        Objective: {{ c.objective }}<br>
+        Raw rows merged: {{ c.raw_rows }}
+      </div>
     </div>
   </div>
   {% endfor %}
