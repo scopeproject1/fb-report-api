@@ -4,4 +4,6 @@ pydantic
 pandas
 openpyxl
 python-multipart
-reportlab
+openai
+jinja2
+playwright

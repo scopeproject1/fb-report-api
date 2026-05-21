@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+<meta charset="UTF-8" />
+<style>
+@page { size: A4; margin: 0; }
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Noto Sans Georgian", "Noto Sans", Arial, sans-serif;
+  color: #111827;
+  background: #ffffff;
+}
+
+.page {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 22mm;
+  page-break-after: always;
+}
+
+.cover {
+  background: linear-gradient(135deg, #111827, #1f2937);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.cover h1 {
+  font-size: 42px;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.cover .period {
+  font-size: 20px;
+  margin-top: 20px;
+  color: #d1d5db;
+}
+
+.small {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.cover .small {
+  color: #d1d5db;
+}
+
+h2 {
+  font-size: 28px;
+  margin: 0 0 22px;
+}
+
+h3 {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.kpi {
+  background: #f3f4f6;
+  border-radius: 18px;
+  padding: 18px;
+}
+
+.kpi .label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.kpi .value {
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.ai-box {
+  background: #f9fafb;
+  border-left: 5px solid #111827;
+  padding: 18px;
+  border-radius: 14px;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.card {
+  display: grid;
+  grid-template-columns: 34% 66%;
+  gap: 18px;
+  background: #f8fafc;
+  border-radius: 22px;
+  padding: 18px;
+  margin-bottom: 18px;
+  break-inside: avoid;
+}
+
+.visual {
+  background: linear-gradient(160deg, #111827, #374151);
+  color: white;
+  border-radius: 18px;
+  padding: 16px;
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.visual .id {
+  font-size: 36px;
+  font-weight: 900;
+}
+
+.visual .type {
+  font-size: 11px;
+  color: #d1d5db;
+}
+
+.visual .name {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.metric {
+  background: white;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.metric .label {
+  font-size: 10px;
+  color: #6b7280;
+}
+
+.metric .value {
+  font-size: 16px;
+  font-weight: 800;
+  margin-top: 4px;
+}
+
+.meta {
+  margin-top: 14px;
+  font-size: 11px;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: 1fr 100px;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 9px 0;
+  font-size: 12px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #111827;
+  color: white;
+  font-size: 11px;
+  margin-bottom: 12px;
+}
+</style>
+</head>
+
+<body>
+
+<section class="page cover">
+  <div>
+    <div class="badge">AI Generated Report</div>
+    <h1>{{ brand }}<br>Ads Performance Report</h1>
+    <div class="period">{{ month }}</div>
+  </div>
+  <div class="small">
+    Generated automatically by AI Reporting System<br>
+    {{ generated_at }}
+  </div>
+</section>
+
+<section class="page">
+  <h2>Monthly Overview</h2>
+  <div class="grid">
+    <div class="kpi"><div class="label">Total Spent</div><div class="value">{{ money(totals.spent) }}</div></div>
+    <div class="kpi"><div class="label">Reach</div><div class="value">{{ num(totals.reach) }}</div></div>
+    <div class="kpi"><div class="label">Impressions</div><div class="value">{{ num(totals.impressions) }}</div></div>
+    <div class="kpi"><div class="label">Results</div><div class="value">{{ num(totals.results) }}</div></div>
+    <div class="kpi"><div class="label">Average CPR</div><div class="value">{{ money(totals.avg_cpr) }}</div></div>
+    <div class="kpi"><div class="label">Creatives Analyzed</div><div class="value">{{ totals.creative_count }}</div></div>
+  </div>
+</section>
+
+<section class="page">
+  <h2>AI Analysis & Recommendations</h2>
+  <div class="ai-box">{{ ai_text }}</div>
+</section>
+
+<section class="page">
+  <h2>Top Performing Creatives</h2>
+  {% for c in top_creatives %}
+  <div class="card">
+    <div class="visual">
+      <div>
+        <div class="id">#{{ "%02d"|format(loop.index) }}</div>
+        <div class="type">Generated Creative Visual ID</div>
+      </div>
+      <div class="name">{{ c.ad_name }}</div>
+    </div>
+    <div>
+      <h3>{{ c.ad_name }}</h3>
+      <div class="metrics">
+        <div class="metric"><div class="label">Results</div><div class="value">{{ num(c.results) }}</div></div>
+        <div class="metric"><div class="label">Reach</div><div class="value">{{ num(c.reach) }}</div></div>
+        <div class="metric"><div class="label">Impressions</div><div class="value">{{ num(c.impressions) }}</div></div>
+        <div class="metric"><div class="label">Spend</div><div class="value">{{ money(c.spent) }}</div></div>
+        <div class="metric"><div class="label">CPR</div><div class="value">{{ money(c.cpr) }}</div></div>
+        <div class="metric"><div class="label">Result Type</div><div class="value">{{ c.result_type }}</div></div>
+      </div>
+      <div class="meta">
+        Page: {{ c.page_name }}<br>
+        Campaign: {{ c.campaign_name }}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="page">
+  <h2>Weak / High-Cost Creatives</h2>
+  {% for c in weak_creatives %}
+  <div class="card">
+    <div class="visual">
+      <div>
+        <div class="id">W{{ "%02d"|format(loop.index) }}</div>
+        <div class="type">Needs Optimization</div>
+      </div>
+      <div class="name">{{ c.ad_name }}</div>
+    </div>
+    <div>
+      <h3>{{ c.ad_name }}</h3>
+      <div class="metrics">
+        <div class="metric"><div class="label">Results</div><div class="value">{{ num(c.results) }}</div></div>
+        <div class="metric"><div class="label">Spend</div><div class="value">{{ money(c.spent) }}</div></div>
+        <div class="metric"><div class="label">CPR</div><div class="value">{{ money(c.cpr) }}</div></div>
+        <div class="metric"><div class="label">Impressions</div><div class="value">{{ num(c.impressions) }}</div></div>
+      </div>
+      <div class="meta">
+        Campaign: {{ c.campaign_name }}<br>
+        Result type: {{ c.result_type }}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="page">
+  <h2>Audience Insights</h2>
+
+  <h3>Age Breakdown</h3>
+  {% for item in age_breakdown %}
+  <div class="table-row">
+    <div>{{ item.name }}</div>
+    <div>{{ num(item.value) }}</div>
+  </div>
+  {% endfor %}
+
+  <br><br>
+
+  <h3>Gender Breakdown</h3>
+  {% for item in gender_breakdown %}
+  <div class="table-row">
+    <div>{{ item.name }}</div>
+    <div>{{ num(item.value) }}</div>
+  </div>
+  {% endfor %}
+
+  <br><br>
+
+  <h3>Objective Breakdown</h3>
+  {% for item in objective_breakdown %}
+  <div class="table-row">
+    <div>{{ item.name }}</div>
+    <div>{{ num(item.value) }}</div>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="page">
+  <h2>All Creative Cards</h2>
+  {% for c in creatives %}
+  <div class="card">
+    <div class="visual">
+      <div>
+        <div class="id">{{ "%02d"|format(c.id) }}</div>
+        <div class="type">{{ c.result_type }}</div>
+      </div>
+      <div class="name">{{ c.ad_name }}</div>
+    </div>
+    <div>
+      <h3>{{ c.ad_name }}</h3>
+      <div class="metrics">
+        <div class="metric"><div class="label">Results</div><div class="value">{{ num(c.results) }}</div></div>
+        <div class="metric"><div class="label">Reach</div><div class="value">{{ num(c.reach) }}</div></div>
+        <div class="metric"><div class="label">Impressions</div><div class="value">{{ num(c.impressions) }}</div></div>
+        <div class="metric"><div class="label">Spend</div><div class="value">{{ money(c.spent) }}</div></div>
+        <div class="metric"><div class="label">CPR</div><div class="value">{{ money(c.cpr) }}</div></div>
+        <div class="metric"><div class="label">Page</div><div class="value">{{ c.page_name }}</div></div>
+      </div>
+      <div class="meta">Campaign: {{ c.campaign_name }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+</body>
+</html>
