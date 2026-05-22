@@ -19,7 +19,7 @@ MAX_CREATIVE_CARDS = 120
 
 @app.get("/")
 def root():
-    return {"status": "running", "version": "aggregation-v2"}
+    return {"status": "running", "version": "objective-aware-v1"}
 
 
 def money(v):
@@ -80,11 +80,48 @@ def dominant_text(values):
     return vals.mode().iloc[0]
 
 
+def detect_result_category(row):
+    result_type = normalize_text(row.get("Result type", ""))
+    campaign = normalize_text(row.get("Campaign name", ""))
+    objective = normalize_text(row.get("Objective", ""))
+
+    messaging = float(row.get("Messaging conversations started", 0) or 0)
+    purchases = float(row.get("Purchases", 0) or 0)
+
+    if "messaging" in result_type or "message" in result_type:
+        return "MESSAGES"
+
+    if "post engagement" in result_type or "engagement" in result_type:
+        return "ENGAGEMENT"
+
+    if "purchase" in result_type or purchases > 0:
+        return "PURCHASES"
+
+    if "message" in campaign or "messaging" in campaign or messaging > 0:
+        return "MESSAGES"
+
+    if "engagement" in campaign or "engagement" in objective:
+        return "ENGAGEMENT"
+
+    return "OTHER"
+
+
+def display_result_type(category):
+    mapping = {
+        "ENGAGEMENT": "Post engagements",
+        "MESSAGES": "Messaging conversations started",
+        "PURCHASES": "Purchases",
+        "OTHER": "Other results",
+    }
+    return mapping.get(category, "Other results")
+
+
 def creative_key(row):
     page = normalize_text(row.get("Page name", ""))
     campaign = normalize_text(row.get("Campaign name", ""))
     ad = normalize_text(row.get("Ad name", ""))
-    return f"{page}|{campaign}|{ad}"
+    category = detect_result_category(row)
+    return f"{page}|{campaign}|{ad}|{category}"
 
 
 def sum_by_column(rows, group_col, value_col="Results"):
@@ -99,10 +136,7 @@ def sum_by_column(rows, group_col, value_col="Results"):
 
     sorted_items = sorted(result.items(), key=lambda x: x[1], reverse=True)
 
-    return [
-        {"name": str(k), "value": int(v)}
-        for k, v in sorted_items
-    ]
+    return [{"name": str(k), "value": int(v)} for k, v in sorted_items]
 
 
 def best_segment(rows, group_col):
@@ -118,11 +152,7 @@ def best_segment(rows, group_col):
     top = data[0]
     share = round((top["value"] / total) * 100, 1) if total else 0
 
-    return {
-        "name": top["name"],
-        "value": top["value"],
-        "share": share
-    }
+    return {"name": top["name"], "value": top["value"], "share": share}
 
 
 def build_creatives(df):
@@ -130,14 +160,16 @@ def build_creatives(df):
         raise ValueError("Excel must contain 'Ad name' column")
 
     df = df.copy()
+    df["_result_category"] = df.apply(detect_result_category, axis=1)
     df["_creative_key"] = df.apply(creative_key, axis=1)
 
     creatives = []
 
     for key, sub in df.groupby("_creative_key", dropna=False):
         rows = sub.to_dict("records")
-
         first = rows[0]
+
+        category = clean_text(first.get("_result_category", "OTHER"))
 
         spent = safe_sum(sub, "Amount spent (USD)")
         results = safe_sum(sub, "Results")
@@ -152,31 +184,19 @@ def build_creatives(df):
         frequency = round(impressions / reach, 2) if reach else None
         roas = round(purchase_value / spent, 2) if spent else None
 
-        result_type = dominant_text(sub["Result type"]) if "Result type" in sub.columns else ""
         objective = dominant_text(sub["Objective"]) if "Objective" in sub.columns else ""
         delivery_status = dominant_text(sub["Delivery status"]) if "Delivery status" in sub.columns else ""
 
-        if not result_type:
-            if messaging > 0:
-                result_type = "Messaging conversations started"
-            elif purchases > 0:
-                result_type = "Purchases"
-            elif results > 0:
-                result_type = "Results"
-            else:
-                result_type = "No results"
-
         best_age = best_segment(rows, "Age")
         best_gender = best_segment(rows, "Gender")
-
-        age_breakdown = sum_by_column(rows, "Age", "Results")
-        gender_breakdown = sum_by_column(rows, "Gender", "Results")
 
         creatives.append({
             "ad_name": clean_text(first.get("Ad name", "")),
             "campaign_name": clean_text(first.get("Campaign name", "")),
             "page_name": clean_text(first.get("Page name", "")),
-            "result_type": result_type,
+
+            "result_category": category,
+            "result_type": display_result_type(category),
             "objective": objective,
             "delivery_status": delivery_status,
 
@@ -196,16 +216,16 @@ def build_creatives(df):
 
             "best_age": best_age,
             "best_gender": best_gender,
-            "age_breakdown": age_breakdown[:5],
-            "gender_breakdown": gender_breakdown[:5],
+
+            "age_breakdown": sum_by_column(rows, "Age", "Results")[:5],
+            "gender_breakdown": sum_by_column(rows, "Gender", "Results")[:5],
 
             "raw_rows": len(sub)
         })
 
     creatives = sorted(
         creatives,
-        key=lambda x: (x["results"], x["spent"]),
-        reverse=True
+        key=lambda x: (x["result_category"], -x["results"], -x["spent"])
     )
 
     for i, creative in enumerate(creatives, start=1):
@@ -231,33 +251,42 @@ def breakdown(df, group_col, metric_col="Results", limit=10):
     return [{"name": str(k), "value": int(v)} for k, v in grouped.items()]
 
 
+def category_summary(creatives, category):
+    items = [c for c in creatives if c["result_category"] == category]
+    return sorted(items, key=lambda x: (x["results"], -x["cpr"] if x["cpr"] else 0), reverse=True)[:10]
+
+
 def ai_analysis(payload):
     prompt = f"""
 შენ ხარ senior Meta Ads analyst.
 
 მონაცემები მოდის Meta Ads Manager Raw XLSX export-იდან.
-Raw rows დაყოფილია age/gender/day breakdown-ებად, მაგრამ ქვემოთ creatives უკვე სწორადაა გაერთიანებული.
+ყველა monetary value არის USD-ში, არა GEL-ში.
+არასოდეს გამოიყენო სიტყვა "ლარი". გამოიყენე მხოლოდ "USD" ან "დოლარი".
+
+მნიშვნელოვანი:
+- Raw rows ჩაშლილია age/gender/day breakdown-ებად.
+- Creatives დაჯგუფებულია ასე: Ad name + Campaign name + Page name + Result Category.
+- ერთი და იგივე პოსტი შეიძლება ცალკე იყოს ENGAGEMENT და MESSAGES კატეგორიებში. ეს სწორია.
+- არ შეადარო Post Engagements და Messaging Conversations პირდაპირ როგორც ერთი ტიპის result.
+- არ გამოიგონო ვიდეო/carousel/placement/format, თუ მონაცემში არ ჩანს.
+- თუ დასკვნა არის ვარაუდი, დაწერე როგორც ვარაუდი.
 
 მონაცემები:
 {json.dumps(payload, ensure_ascii=False, indent=2)}
 
-დაწერე ქართულად. იყავი კონკრეტული და ბიზნესისთვის სასარგებლო.
-
-აუცილებელი წესები:
-- არ გამოიგონო ისეთი რამ, რაც მონაცემებში არ ჩანს.
-- არ ახსენო video/carousel/placement თუ მონაცემში არ არის.
-- თუ დასკვნა არის ვარაუდი, დაწერე როგორც ვარაუდი.
-- creative-level ანალიზი გააკეთე aggregated მონაცემებზე.
+დაწერე ქართულად, მოკლედ, მაგრამ ღირებულად.
 
 სტრუქტურა:
 1. Executive Summary
-2. KPI შეფასება
-3. საუკეთესო creatives/post-ები და მიზეზები
-4. სუსტი/არაეფექტური creatives/post-ები
-5. Audience insights — ასაკი და სქესი
-6. Budget efficiency
-7. მომდევნო თვის action plan
-8. 5 კონკრეტული რეკომენდაცია
+2. KPI შეფასება USD-ში
+3. ENGAGEMENT creatives analysis
+4. MESSAGES creatives analysis
+5. სუსტი/ძვირი creatives
+6. Audience insights — ასაკი და სქესი
+7. Budget efficiency
+8. მომდევნო თვის action plan
+9. 5 კონკრეტული რეკომენდაცია
 """
 
     try:
@@ -266,14 +295,11 @@ Raw rows დაყოფილია age/gender/day breakdown-ებად, მ�
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a senior paid media strategist and reporting analyst."
+                    "content": "You are a senior paid media strategist and reporting analyst. Never invent facts not present in the data."
                 },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
+                {"role": "user", "content": prompt}
             ],
-            temperature=0.25
+            temperature=0.2
         )
         return res.choices[0].message.content
     except Exception as e:
@@ -324,13 +350,9 @@ async def process_report(
     avg_frequency = round(total_impressions / total_reach, 2) if total_reach else None
     total_roas = round(total_purchase_value / total_spent, 2) if total_spent else None
 
-    top_creatives = creatives[:10]
-
-    zero_result_creatives = sorted(
-        [c for c in creatives if c["spent"] > 0 and c["results"] == 0],
-        key=lambda x: x["spent"],
-        reverse=True
-    )[:10]
+    engagement_creatives = category_summary(creatives, "ENGAGEMENT")
+    message_creatives = category_summary(creatives, "MESSAGES")
+    purchase_creatives = category_summary(creatives, "PURCHASES")
 
     high_cpr_creatives = sorted(
         [c for c in creatives if c["results"] > 0 and c["cpr"] is not None],
@@ -338,27 +360,39 @@ async def process_report(
         reverse=True
     )[:10]
 
+    zero_result_creatives = sorted(
+        [c for c in creatives if c["spent"] > 0 and c["results"] == 0],
+        key=lambda x: x["spent"],
+        reverse=True
+    )[:10]
+
     weak_creatives = zero_result_creatives if zero_result_creatives else high_cpr_creatives
+
+    top_creatives = engagement_creatives + message_creatives + purchase_creatives
+    top_creatives = top_creatives[:10] if top_creatives else creatives[:10]
 
     payload = {
         "brand": brand,
         "month": month,
+        "currency": "USD",
         "totals": {
-            "spent": total_spent,
+            "spent_usd": total_spent,
             "reach": total_reach,
             "impressions": total_impressions,
             "results": total_results,
             "purchases": total_purchases,
             "messaging_conversations": total_messaging,
-            "purchase_value": total_purchase_value,
-            "avg_cpr": avg_cpr,
-            "avg_cpm": avg_cpm,
+            "purchase_value_usd": total_purchase_value,
+            "avg_cpr_usd": avg_cpr,
+            "avg_cpm_usd": avg_cpm,
             "avg_frequency": avg_frequency,
             "roas": total_roas,
             "raw_rows": len(df),
             "creative_count": len(creatives),
         },
-        "top_creatives": top_creatives,
+        "top_engagement_creatives": engagement_creatives,
+        "top_message_creatives": message_creatives,
+        "top_purchase_creatives": purchase_creatives,
         "weak_creatives": weak_creatives,
         "high_cpr_creatives": high_cpr_creatives,
         "age_breakdown": breakdown(df, "Age"),
@@ -375,7 +409,21 @@ async def process_report(
         brand=brand,
         month=month,
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
-        totals=payload["totals"],
+        totals={
+            "spent": total_spent,
+            "reach": total_reach,
+            "impressions": total_impressions,
+            "results": total_results,
+            "purchases": total_purchases,
+            "messaging_conversations": total_messaging,
+            "purchase_value": total_purchase_value,
+            "avg_cpr": avg_cpr,
+            "avg_cpm": avg_cpm,
+            "avg_frequency": avg_frequency,
+            "roas": total_roas,
+            "raw_rows": len(df),
+            "creative_count": len(creatives),
+        },
         creatives=creatives,
         top_creatives=top_creatives,
         weak_creatives=weak_creatives,
