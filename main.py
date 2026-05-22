@@ -14,12 +14,12 @@ app = FastAPI()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 MODEL = "gpt-4.1-mini"
-MAX_CREATIVE_CARDS = 80
+MAX_CREATIVE_CARDS = 120
 
 
 @app.get("/")
 def root():
-    return {"status": "running"}
+    return {"status": "running", "version": "aggregation-v2"}
 
 
 def money(v):
@@ -40,19 +40,24 @@ def num(v):
         return "0"
 
 
-def pct(v):
-    if v is None:
-        return "-"
-    try:
-        return f"{float(v):,.1f}%"
-    except Exception:
-        return "-"
-
-
 def clean_text(v):
     if pd.isna(v):
         return ""
     return str(v).strip()
+
+
+def normalize_text(text):
+    if pd.isna(text):
+        return ""
+    text = str(text).strip().lower()
+    text = text.replace("\u200b", "").replace("\ufeff", "")
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def safe_filename(text):
+    text = re.sub(r"[^a-zA-Z0-9_\-]+", "_", text)
+    return text.strip("_")[:80]
 
 
 def to_number(df, col):
@@ -67,46 +72,146 @@ def safe_sum(df, col):
     return pd.to_numeric(df[col], errors="coerce").fillna(0).sum()
 
 
-def safe_filename(text):
-    text = re.sub(r"[^a-zA-Z0-9_\-]+", "_", text)
-    return text.strip("_")[:80]
-
-
-def dominant_text(sub, col):
-    if col not in sub.columns:
-        return ""
-    vals = sub[col].dropna().astype(str)
+def dominant_text(values):
+    vals = pd.Series(values).dropna().astype(str)
     vals = vals[vals.str.strip() != ""]
     if vals.empty:
         return ""
     return vals.mode().iloc[0]
 
 
-def best_breakdown(sub, col):
-    if col not in sub.columns:
+def creative_key(row):
+    page = normalize_text(row.get("Page name", ""))
+    campaign = normalize_text(row.get("Campaign name", ""))
+    ad = normalize_text(row.get("Ad name", ""))
+    return f"{page}|{campaign}|{ad}"
+
+
+def sum_by_column(rows, group_col, value_col="Results"):
+    result = {}
+
+    for row in rows:
+        key = clean_text(row.get(group_col, ""))
+        if not key:
+            continue
+        value = row.get(value_col, 0) or 0
+        result[key] = result.get(key, 0) + float(value)
+
+    sorted_items = sorted(result.items(), key=lambda x: x[1], reverse=True)
+
+    return [
+        {"name": str(k), "value": int(v)}
+        for k, v in sorted_items
+    ]
+
+
+def best_segment(rows, group_col):
+    data = sum_by_column(rows, group_col, "Results")
+
+    if not data:
+        data = sum_by_column(rows, group_col, "Impressions")
+
+    if not data:
         return {"name": "-", "value": 0, "share": 0}
 
-    metric = "Results" if "Results" in sub.columns and safe_sum(sub, "Results") > 0 else "Impressions"
-
-    grouped = (
-        sub.groupby(col)[metric]
-        .sum()
-        .sort_values(ascending=False)
-    )
-
-    if grouped.empty:
-        return {"name": "-", "value": 0, "share": 0}
-
-    total = grouped.sum()
-    top_name = str(grouped.index[0])
-    top_value = float(grouped.iloc[0])
-    share = round((top_value / total) * 100, 1) if total else 0
+    total = sum(item["value"] for item in data)
+    top = data[0]
+    share = round((top["value"] / total) * 100, 1) if total else 0
 
     return {
-        "name": top_name,
-        "value": int(top_value),
+        "name": top["name"],
+        "value": top["value"],
         "share": share
     }
+
+
+def build_creatives(df):
+    if "Ad name" not in df.columns:
+        raise ValueError("Excel must contain 'Ad name' column")
+
+    df = df.copy()
+    df["_creative_key"] = df.apply(creative_key, axis=1)
+
+    creatives = []
+
+    for key, sub in df.groupby("_creative_key", dropna=False):
+        rows = sub.to_dict("records")
+
+        first = rows[0]
+
+        spent = safe_sum(sub, "Amount spent (USD)")
+        results = safe_sum(sub, "Results")
+        reach = safe_sum(sub, "Reach")
+        impressions = safe_sum(sub, "Impressions")
+        purchases = safe_sum(sub, "Purchases")
+        messaging = safe_sum(sub, "Messaging conversations started")
+        purchase_value = safe_sum(sub, "Purchases conversion value")
+
+        cpr = round(spent / results, 2) if results else None
+        cpm = round((spent / impressions) * 1000, 2) if impressions else None
+        frequency = round(impressions / reach, 2) if reach else None
+        roas = round(purchase_value / spent, 2) if spent else None
+
+        result_type = dominant_text(sub["Result type"]) if "Result type" in sub.columns else ""
+        objective = dominant_text(sub["Objective"]) if "Objective" in sub.columns else ""
+        delivery_status = dominant_text(sub["Delivery status"]) if "Delivery status" in sub.columns else ""
+
+        if not result_type:
+            if messaging > 0:
+                result_type = "Messaging conversations started"
+            elif purchases > 0:
+                result_type = "Purchases"
+            elif results > 0:
+                result_type = "Results"
+            else:
+                result_type = "No results"
+
+        best_age = best_segment(rows, "Age")
+        best_gender = best_segment(rows, "Gender")
+
+        age_breakdown = sum_by_column(rows, "Age", "Results")
+        gender_breakdown = sum_by_column(rows, "Gender", "Results")
+
+        creatives.append({
+            "ad_name": clean_text(first.get("Ad name", "")),
+            "campaign_name": clean_text(first.get("Campaign name", "")),
+            "page_name": clean_text(first.get("Page name", "")),
+            "result_type": result_type,
+            "objective": objective,
+            "delivery_status": delivery_status,
+
+            "results": int(results),
+            "reach": int(reach),
+            "impressions": int(impressions),
+            "spent": round(float(spent), 2),
+
+            "cpr": cpr,
+            "cpm": cpm,
+            "frequency": frequency,
+
+            "purchases": int(purchases),
+            "messaging": int(messaging),
+            "purchase_value": round(float(purchase_value), 2),
+            "roas": roas,
+
+            "best_age": best_age,
+            "best_gender": best_gender,
+            "age_breakdown": age_breakdown[:5],
+            "gender_breakdown": gender_breakdown[:5],
+
+            "raw_rows": len(sub)
+        })
+
+    creatives = sorted(
+        creatives,
+        key=lambda x: (x["results"], x["spent"]),
+        reverse=True
+    )
+
+    for i, creative in enumerate(creatives, start=1):
+        creative["id"] = i
+
+    return creatives[:MAX_CREATIVE_CARDS]
 
 
 def breakdown(df, group_col, metric_col="Results", limit=10):
@@ -126,110 +231,33 @@ def breakdown(df, group_col, metric_col="Results", limit=10):
     return [{"name": str(k), "value": int(v)} for k, v in grouped.items()]
 
 
-def build_creatives(df):
-    group_cols = ["Ad name", "Campaign name", "Page name"]
-    group_cols = [c for c in group_cols if c in df.columns]
-
-    if "Ad name" not in group_cols:
-        raise ValueError("Excel must contain 'Ad name' column")
-
-    cards = []
-
-    for keys, sub in df.groupby(group_cols, dropna=False):
-        if not isinstance(keys, tuple):
-            keys = (keys,)
-
-        key_map = dict(zip(group_cols, keys))
-
-        spent = safe_sum(sub, "Amount spent (USD)")
-        results = safe_sum(sub, "Results")
-        reach = safe_sum(sub, "Reach")
-        impressions = safe_sum(sub, "Impressions")
-        purchases = safe_sum(sub, "Purchases")
-        messaging = safe_sum(sub, "Messaging conversations started")
-        purchase_value = safe_sum(sub, "Purchases conversion value")
-
-        cpr = round(spent / results, 2) if results else None
-        cpm = round((spent / impressions) * 1000, 2) if impressions else None
-        frequency = round(impressions / reach, 2) if reach else None
-        roas = round(purchase_value / spent, 2) if spent else None
-
-        result_type = dominant_text(sub, "Result type")
-        objective = dominant_text(sub, "Objective")
-        delivery_status = dominant_text(sub, "Delivery status")
-
-        if not result_type:
-            if messaging > 0:
-                result_type = "Messaging conversations started"
-            elif purchases > 0:
-                result_type = "Purchases"
-            elif results > 0:
-                result_type = "Results"
-            else:
-                result_type = "No results"
-
-        best_age = best_breakdown(sub, "Age")
-        best_gender = best_breakdown(sub, "Gender")
-
-        cards.append({
-            "id": len(cards) + 1,
-            "ad_name": clean_text(key_map.get("Ad name", "")),
-            "campaign_name": clean_text(key_map.get("Campaign name", "")),
-            "page_name": clean_text(key_map.get("Page name", "")),
-            "result_type": result_type,
-            "objective": objective,
-            "delivery_status": delivery_status,
-
-            "results": int(results),
-            "reach": int(reach),
-            "impressions": int(impressions),
-            "spent": round(float(spent), 2),
-            "cpr": cpr,
-            "cpm": cpm,
-            "frequency": frequency,
-
-            "purchases": int(purchases),
-            "messaging": int(messaging),
-            "purchase_value": round(float(purchase_value), 2),
-            "roas": roas,
-
-            "best_age": best_age,
-            "best_gender": best_gender,
-            "raw_rows": len(sub)
-        })
-
-    cards = sorted(cards, key=lambda x: (x["results"], x["spent"]), reverse=True)
-
-    for i, c in enumerate(cards, start=1):
-        c["id"] = i
-
-    return cards
-
-
 def ai_analysis(payload):
     prompt = f"""
 შენ ხარ senior Meta Ads analyst.
 
-ქვემოთ მოცემულია Meta Ads Manager Raw XLSX export-იდან სწორად დაჯამებული მონაცემები.
-გაითვალისწინე: raw rows ჩაშლილია age/gender/day breakdown-ებად, ამიტომ creative-level ანალიზი ეფუძნება aggregated creative data-ს.
+მონაცემები მოდის Meta Ads Manager Raw XLSX export-იდან.
+Raw rows დაყოფილია age/gender/day breakdown-ებად, მაგრამ ქვემოთ creatives უკვე სწორადაა გაერთიანებული.
 
 მონაცემები:
 {json.dumps(payload, ensure_ascii=False, indent=2)}
 
-დაწერე ქართულად, კონკრეტულად და ბიზნესისთვის გასაგებად.
+დაწერე ქართულად. იყავი კონკრეტული და ბიზნესისთვის სასარგებლო.
 
-აუცილებლად გააკეთე:
-1. მოკლე Executive Summary
-2. მთავარი KPI შეფასება
-3. საუკეთესო creatives/post-ები და რატომ იმუშავა
-4. სუსტი creatives/post-ები და სავარაუდო პრობლემა
-5. Audience insights — ასაკი/სქესი
-6. Budget efficiency analysis
-7. თითოეული მნიშვნელოვანი creative-ის მოკლე ინტერპრეტაცია
-8. მომდევნო თვის action plan
-9. 5 კონკრეტული რეკომენდაცია
+აუცილებელი წესები:
+- არ გამოიგონო ისეთი რამ, რაც მონაცემებში არ ჩანს.
+- არ ახსენო video/carousel/placement თუ მონაცემში არ არის.
+- თუ დასკვნა არის ვარაუდი, დაწერე როგორც ვარაუდი.
+- creative-level ანალიზი გააკეთე aggregated მონაცემებზე.
 
-არ გამოიგონო მონაცემები. გამოიყენე მხოლოდ მოწოდებული რიცხვები.
+სტრუქტურა:
+1. Executive Summary
+2. KPI შეფასება
+3. საუკეთესო creatives/post-ები და მიზეზები
+4. სუსტი/არაეფექტური creatives/post-ები
+5. Audience insights — ასაკი და სქესი
+6. Budget efficiency
+7. მომდევნო თვის action plan
+8. 5 კონკრეტული რეკომენდაცია
 """
 
     try:
@@ -245,7 +273,7 @@ def ai_analysis(payload):
                     "content": prompt
                 }
             ],
-            temperature=0.3
+            temperature=0.25
         )
         return res.choices[0].message.content
     except Exception as e:
@@ -358,7 +386,6 @@ async def process_report(
         ai_text=ai_text,
         money=money,
         num=num,
-        pct=pct,
     )
 
     html_path = tempfile.NamedTemporaryFile(delete=False, suffix=".html").name
