@@ -19,7 +19,7 @@ MAX_CREATIVE_CARDS = 120
 
 @app.get("/")
 def root():
-    return {"status": "running", "version": "objective-aware-v2"}
+    return {"status": "running", "version": "media-buying-engine-v1"}
 
 
 def money(v):
@@ -90,16 +90,12 @@ def detect_result_category(row):
 
     if "messaging" in result_type or "message" in result_type:
         return "MESSAGES"
-
     if "post engagement" in result_type or "engagement" in result_type:
         return "ENGAGEMENT"
-
     if "purchase" in result_type or purchases > 0:
         return "PURCHASES"
-
     if "message" in campaign or "messaging" in campaign or messaging > 0:
         return "MESSAGES"
-
     if "engagement" in campaign or "engagement" in objective:
         return "ENGAGEMENT"
 
@@ -107,13 +103,12 @@ def detect_result_category(row):
 
 
 def display_result_type(category):
-    mapping = {
+    return {
         "ENGAGEMENT": "Post engagements",
         "MESSAGES": "Messaging conversations started",
         "PURCHASES": "Purchases",
         "OTHER": "Other results",
-    }
-    return mapping.get(category, "Other results")
+    }.get(category, "Other results")
 
 
 def creative_key(row):
@@ -136,27 +131,34 @@ def sum_by_column(rows, group_col, value_col="Results"):
         result[key] = result.get(key, 0) + float(value)
 
     sorted_items = sorted(result.items(), key=lambda x: x[1], reverse=True)
-
     return [{"name": str(k), "value": int(v)} for k, v in sorted_items]
 
 
-def best_segment(rows, group_col):
+def segment_summary(rows, group_col):
     data = sum_by_column(rows, group_col, "Results")
 
     if not data:
         data = sum_by_column(rows, group_col, "Impressions")
 
     if not data:
-        return {"name": "-", "value": 0, "share": 0}
+        return {
+            "best": {"name": "-", "value": 0, "share": 0},
+            "worst": {"name": "-", "value": 0, "share": 0},
+            "breakdown": []
+        }
 
     total = sum(item["value"] for item in data)
-    top = data[0]
-    share = round((top["value"] / total) * 100, 1) if total else 0
+
+    best = data[0]
+    worst = data[-1]
+
+    best_share = round((best["value"] / total) * 100, 1) if total else 0
+    worst_share = round((worst["value"] / total) * 100, 1) if total else 0
 
     return {
-        "name": top["name"],
-        "value": top["value"],
-        "share": share
+        "best": {"name": best["name"], "value": best["value"], "share": best_share},
+        "worst": {"name": worst["name"], "value": worst["value"], "share": worst_share},
+        "breakdown": data[:5]
     }
 
 
@@ -170,10 +172,9 @@ def build_creatives(df):
 
     creatives = []
 
-    for key, sub in df.groupby("_creative_key", dropna=False):
+    for _, sub in df.groupby("_creative_key", dropna=False):
         rows = sub.to_dict("records")
         first = rows[0]
-
         category = clean_text(first.get("_result_category", "OTHER"))
 
         spent = safe_sum(sub, "Amount spent (USD)")
@@ -187,13 +188,13 @@ def build_creatives(df):
         cpr = round(spent / results, 2) if results else None
         cpm = round((spent / impressions) * 1000, 2) if impressions else None
         frequency = round(impressions / reach, 2) if reach else None
-        roas = round(purchase_value / spent, 2) if spent else None
+        roas = round(purchase_value / spent, 2) if purchase_value and spent else None
 
         objective = dominant_text(sub["Objective"]) if "Objective" in sub.columns else ""
         delivery_status = dominant_text(sub["Delivery status"]) if "Delivery status" in sub.columns else ""
 
-        best_age = best_segment(rows, "Age")
-        best_gender = best_segment(rows, "Gender")
+        age_info = segment_summary(rows, "Age")
+        gender_info = segment_summary(rows, "Gender")
 
         creatives.append({
             "ad_name": clean_text(first.get("Ad name", "")),
@@ -219,11 +220,13 @@ def build_creatives(df):
             "purchase_value": round(float(purchase_value), 2),
             "roas": roas,
 
-            "best_age": best_age,
-            "best_gender": best_gender,
+            "best_age": age_info["best"],
+            "worst_age": age_info["worst"],
+            "age_breakdown": age_info["breakdown"],
 
-            "age_breakdown": sum_by_column(rows, "Age", "Results")[:5],
-            "gender_breakdown": sum_by_column(rows, "Gender", "Results")[:5],
+            "best_gender": gender_info["best"],
+            "worst_gender": gender_info["worst"],
+            "gender_breakdown": gender_info["breakdown"],
 
             "raw_rows": len(sub)
         })
@@ -237,32 +240,6 @@ def build_creatives(df):
         creative["id"] = i
 
     return creatives[:MAX_CREATIVE_CARDS]
-
-
-def breakdown(df, group_col, metric_col="Results", limit=10):
-    if group_col not in df.columns or metric_col not in df.columns:
-        return []
-
-    temp = df.copy()
-    temp[metric_col] = pd.to_numeric(temp[metric_col], errors="coerce").fillna(0)
-
-    grouped = (
-        temp.groupby(group_col)[metric_col]
-        .sum()
-        .sort_values(ascending=False)
-        .head(limit)
-    )
-
-    return [{"name": str(k), "value": int(v)} for k, v in grouped.items()]
-
-
-def category_summary(creatives, category):
-    items = [c for c in creatives if c["result_category"] == category]
-    return sorted(
-        items,
-        key=lambda x: (x["results"], -(x["cpr"] or 0)),
-        reverse=True
-    )[:10]
 
 
 def summarize_category(items):
@@ -283,9 +260,145 @@ def summarize_category(items):
     }
 
 
+def percentile_score(value, values, lower_is_better=True):
+    valid = [v for v in values if v is not None]
+    if not valid or value is None:
+        return 50
+
+    min_v = min(valid)
+    max_v = max(valid)
+
+    if max_v == min_v:
+        return 70
+
+    normalized = (value - min_v) / (max_v - min_v)
+
+    if lower_is_better:
+        normalized = 1 - normalized
+
+    return round(normalized * 100)
+
+
+def add_performance_scores(creatives):
+    by_category = {}
+
+    for c in creatives:
+        by_category.setdefault(c["result_category"], []).append(c)
+
+    for category, items in by_category.items():
+        cpr_values = [c["cpr"] for c in items if c["cpr"] is not None]
+        result_values = [c["results"] for c in items]
+        cpm_values = [c["cpm"] for c in items if c["cpm"] is not None]
+        reach_values = [c["reach"] for c in items]
+        frequency_values = [c["frequency"] for c in items if c["frequency"] is not None]
+
+        for c in items:
+            cpr_score = percentile_score(c["cpr"], cpr_values, lower_is_better=True)
+            results_score = percentile_score(c["results"], result_values, lower_is_better=False)
+            cpm_score = percentile_score(c["cpm"], cpm_values, lower_is_better=True)
+            reach_score = percentile_score(c["reach"], reach_values, lower_is_better=False)
+
+            if c["frequency"] is None:
+                frequency_score = 60
+            elif c["frequency"] <= 1.8:
+                frequency_score = 90
+            elif c["frequency"] <= 2.5:
+                frequency_score = 65
+            else:
+                frequency_score = 35
+
+            if category == "MESSAGES":
+                score = (
+                    cpr_score * 0.45 +
+                    results_score * 0.30 +
+                    frequency_score * 0.10 +
+                    cpm_score * 0.10 +
+                    reach_score * 0.05
+                )
+            elif category == "ENGAGEMENT":
+                score = (
+                    cpr_score * 0.35 +
+                    results_score * 0.35 +
+                    cpm_score * 0.15 +
+                    reach_score * 0.10 +
+                    frequency_score * 0.05
+                )
+            else:
+                score = (
+                    cpr_score * 0.40 +
+                    results_score * 0.30 +
+                    cpm_score * 0.15 +
+                    reach_score * 0.10 +
+                    frequency_score * 0.05
+                )
+
+            score = round(score)
+
+            c["performance_score"] = score
+
+            if score >= 80:
+                c["performance_label"] = "Strong Performer"
+                c["efficiency_tier"] = "Efficient"
+                c["budget_recommendation"] = "Increase budget cautiously"
+            elif score >= 60:
+                c["performance_label"] = "Stable Performer"
+                c["efficiency_tier"] = "Balanced"
+                c["budget_recommendation"] = "Keep stable and test variants"
+            elif score >= 40:
+                c["performance_label"] = "Needs Optimization"
+                c["efficiency_tier"] = "Expensive / Weak"
+                c["budget_recommendation"] = "Reduce budget or improve creative"
+            else:
+                c["performance_label"] = "Underperforming"
+                c["efficiency_tier"] = "Inefficient"
+                c["budget_recommendation"] = "Pause candidate"
+
+    return creatives
+
+
+def breakdown(df, group_col, metric_col="Results", limit=10):
+    if group_col not in df.columns or metric_col not in df.columns:
+        return []
+
+    temp = df.copy()
+    temp[metric_col] = pd.to_numeric(temp[metric_col], errors="coerce").fillna(0)
+
+    grouped = (
+        temp.groupby(group_col)[metric_col]
+        .sum()
+        .sort_values(ascending=False)
+        .head(limit)
+    )
+
+    return [{"name": str(k), "value": int(v)} for k, v in grouped.items()]
+
+
+def category_items(creatives, category):
+    return [c for c in creatives if c["result_category"] == category]
+
+
+def top_by_score(items, limit=10):
+    return sorted(
+        items,
+        key=lambda x: (x.get("performance_score", 0), x["results"], -x["cpr"] if x["cpr"] else 0),
+        reverse=True
+    )[:limit]
+
+
+def weak_by_score(items, limit=10):
+    return sorted(
+        items,
+        key=lambda x: (
+            x.get("performance_score", 0),
+            -x["spent"],
+            x["results"]
+        )
+    )[:limit]
+
+
 def ai_analysis(payload):
     prompt = f"""
-შენ ხარ senior Meta Ads analyst.
+შენ ხარ senior Meta Ads analyst და media buyer.
 
 მონაცემები მოდის Meta Ads Manager Raw XLSX export-იდან.
 
@@ -301,24 +414,25 @@ def ai_analysis(payload):
 - არ შეადარო Engagement results და Message results როგორც ერთნაირი შედეგი.
 - Engagement creatives შეაფასე engagement-ის ჭრილში.
 - Message creatives შეაფასე cost per message / messages-ის ჭრილში.
-- თუ პროცენტი არ არის payload-ში, არ დაწერო პროცენტი.
+- Performance Score უკვე დათვლილია Python-ით. გამოიყენე ის, როგორც მთავარი შეფასების ბაზა.
 - არ გამოიყენო ზოგადი რეკომენდაცია, რომელიც მონაცემიდან არ გამომდინარეობს.
 
 მონაცემები:
 {json.dumps(payload, ensure_ascii=False, indent=2)}
 
-დაწერე ქართულად, მკაფიოდ და მოკლედ.
+დაწერე ქართულად, მოკლედ, კონკრეტულად და action-oriented.
 
 სტრუქტურა:
 1. Executive Summary
 2. KPI შეფასება USD-ში
 3. Engagement creatives analysis
 4. Message creatives analysis
-5. სუსტი/ძვირი creatives
-6. Audience insights — მხოლოდ არსებული მონაცემებით
-7. Budget efficiency
-8. მომდევნო თვის action plan
-9. 5 კონკრეტული რეკომენდაცია
+5. Strong performers
+6. Underperformers / pause candidates
+7. Audience insights — მხოლოდ არსებული მონაცემებით
+8. Budget recommendation
+9. მომდევნო თვის action plan
+10. 5 კონკრეტული რეკომენდაცია
 """
 
     try:
@@ -328,20 +442,16 @@ def ai_analysis(payload):
                 {
                     "role": "system",
                     "content": (
-                        "You are a senior paid media reporting analyst. "
-                        "Be strict with data. Do not invent facts, percentages, formats, placements, or currency. "
-                        "All currency is USD."
+                        "You are a strict senior paid media analyst. "
+                        "Use only the provided data. All currency is USD. "
+                        "Never invent facts, placements, formats, or percentages."
                     )
                 },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
+                {"role": "user", "content": prompt}
             ],
             temperature=0.1
         )
         return res.choices[0].message.content
-
     except Exception as e:
         return f"AI analysis unavailable: {str(e)}"
 
@@ -376,6 +486,21 @@ async def process_report(
         df = to_number(df, col)
 
     creatives = build_creatives(df)
+    creatives = add_performance_scores(creatives)
+
+    engagement_creatives_all = category_items(creatives, "ENGAGEMENT")
+    message_creatives_all = category_items(creatives, "MESSAGES")
+    purchase_creatives_all = category_items(creatives, "PURCHASES")
+
+    engagement_creatives = top_by_score(engagement_creatives_all, 10)
+    message_creatives = top_by_score(message_creatives_all, 10)
+    purchase_creatives = top_by_score(purchase_creatives_all, 10)
+
+    category_totals = {
+        "ENGAGEMENT": summarize_category(engagement_creatives_all),
+        "MESSAGES": summarize_category(message_creatives_all),
+        "PURCHASES": summarize_category(purchase_creatives_all),
+    }
 
     total_spent = round(safe_sum(df, "Amount spent (USD)"), 2)
     total_reach = int(safe_sum(df, "Reach"))
@@ -390,29 +515,18 @@ async def process_report(
     avg_frequency = round(total_impressions / total_reach, 2) if total_reach else None
     total_roas = round(total_purchase_value / total_spent, 2) if total_purchase_value and total_spent else None
 
-    engagement_creatives = category_summary(creatives, "ENGAGEMENT")
-    message_creatives = category_summary(creatives, "MESSAGES")
-    purchase_creatives = category_summary(creatives, "PURCHASES")
+    weak_creatives = weak_by_score(creatives, 10)
 
-    category_totals = {
-        "ENGAGEMENT": summarize_category(engagement_creatives),
-        "MESSAGES": summarize_category(message_creatives),
-        "PURCHASES": summarize_category(purchase_creatives),
-    }
-
-    high_cpr_creatives = sorted(
-        [c for c in creatives if c["results"] > 0 and c["cpr"] is not None],
-        key=lambda x: x["cpr"],
+    strong_creatives = sorted(
+        [c for c in creatives if c.get("performance_score", 0) >= 80],
+        key=lambda x: x["performance_score"],
         reverse=True
     )[:10]
 
-    zero_result_creatives = sorted(
-        [c for c in creatives if c["spent"] > 0 and c["results"] == 0],
-        key=lambda x: x["spent"],
-        reverse=True
+    pause_candidates = sorted(
+        [c for c in creatives if c.get("performance_score", 0) < 40],
+        key=lambda x: (x["performance_score"], -x["spent"])
     )[:10]
-
-    weak_creatives = zero_result_creatives if zero_result_creatives else high_cpr_creatives
 
     top_creatives = engagement_creatives + message_creatives + purchase_creatives
     top_creatives = top_creatives[:10] if top_creatives else creatives[:10]
@@ -440,8 +554,9 @@ async def process_report(
         "top_engagement_creatives": engagement_creatives,
         "top_message_creatives": message_creatives,
         "top_purchase_creatives": purchase_creatives,
+        "strong_creatives": strong_creatives,
         "weak_creatives": weak_creatives,
-        "high_cpr_creatives": high_cpr_creatives,
+        "pause_candidates": pause_candidates,
         "age_breakdown": breakdown(df, "Age"),
         "gender_breakdown": breakdown(df, "Gender"),
         "objective_breakdown": breakdown(df, "Objective"),
@@ -474,7 +589,7 @@ async def process_report(
         creatives=creatives,
         top_creatives=top_creatives,
         weak_creatives=weak_creatives,
-        high_cpr_creatives=high_cpr_creatives,
+        high_cpr_creatives=weak_creatives,
         age_breakdown=payload["age_breakdown"],
         gender_breakdown=payload["gender_breakdown"],
         objective_breakdown=payload["objective_breakdown"],
