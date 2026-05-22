@@ -21,7 +21,7 @@ LOW_DATA_MIN_SPEND = 1.0
 
 @app.get("/")
 def root():
-    return {"status": "running", "version": "media-buying-engine-v3-refined"}
+    return {"status": "running", "version": "media-buying-engine-v4-ranking-fix"}
 
 
 def money(v):
@@ -187,11 +187,11 @@ def classify_creative(category, results, spent, cpr, cpm, frequency):
             return "Strong Performer", "Efficient", "Increase budget cautiously", fatigue_risk
         if cpr is not None and cpr <= 0.05:
             return "Good Performer", "Efficient", "Keep active and test variations", fatigue_risk
-        if cpr is not None and cpr <= 0.08:
+        if cpr is not None and cpr <= 0.10:
             return "Needs Optimization", "Moderate", "Keep limited budget and improve creative", fatigue_risk
-        if spent >= 3:
+        if spent >= 8 and cpr is not None and cpr > 0.10:
             return "Pause Candidate", "Inefficient", "Reduce or pause budget", fatigue_risk
-        return "Low Data", "Insufficient Data", "Collect more data before decision", fatigue_risk
+        return "Needs Optimization", "Moderate", "Keep limited budget and improve creative", fatigue_risk
 
     if category == "MESSAGES":
         if results >= 10 and cpr is not None and cpr <= 0.40:
@@ -288,11 +288,6 @@ def build_creatives(df):
             "raw_rows": len(sub)
         })
 
-    creatives = sorted(
-        creatives,
-        key=lambda x: (x["result_category"], -x["results"], -x["spent"])
-    )
-
     for i, creative in enumerate(creatives, start=1):
         creative["id"] = i
 
@@ -351,8 +346,9 @@ def top_items(items, limit=10):
         items,
         key=lambda x: (
             label_rank.get(x["performance_label"], 0),
+            -(x["cpr"] if x["cpr"] is not None else 999),
             x["results"],
-            -(x["cpr"] or 0)
+            -x["spent"]
         ),
         reverse=True
     )[:limit]
@@ -376,7 +372,7 @@ def weak_items(items, limit=10):
         key=lambda x: (
             label_rank.get(x["performance_label"], 9),
             -x["spent"],
-            x["results"]
+            -(x["cpr"] or 0)
         )
     )[:limit]
 
@@ -418,8 +414,6 @@ def ai_analysis(payload):
     prompt = f"""
 შენ ხარ senior Meta Ads analyst და media buyer.
 
-მონაცემები მოდის Meta Ads Manager Raw XLSX export-იდან.
-
 მკაცრი წესები:
 - ყველა monetary value არის USD-ში.
 - არასოდეს გამოიყენო სიტყვა "ლარი".
@@ -430,16 +424,14 @@ def ai_analysis(payload):
 - ROAS არ დაწერო 0-ად, თუ purchase_value_usd ან purchases არ არის.
 - თუ purchases = 0, დაწერე: "ROAS არ არის დათვლადი, რადგან purchase data არ ფიქსირდება."
 - არ შეადარო Engagement results და Message results როგორც ერთნაირი შედეგი.
-- Engagement creatives შეაფასე engagement-ის ჭრილში.
-- Message creatives შეაფასე cost per message / messages-ის ჭრილში.
-- არ გამოიყენო ქულა/score.
 - Low Data creatives-ზე არ გასცე მკაცრი pause/reduce რეკომენდაცია.
+- არ გამოიყენო ქულა/score.
 - არ გამოიყენო ზოგადი რეკომენდაცია, რომელიც მონაცემიდან არ გამომდინარეობს.
 
 მონაცემები:
 {json.dumps(payload, ensure_ascii=False, indent=2)}
 
-დაწერე ქართულად, მოკლედ, კონკრეტულად და action-oriented.
+დაწერე ქართულად, მოკლედ და action-oriented.
 
 სტრუქტურა:
 1. Executive Summary
@@ -616,7 +608,9 @@ async def process_report(
             "creative_count": len(creatives),
         },
         creatives=creatives,
-        top_creatives=engagement_creatives + message_creatives + purchase_creatives,
+        top_engagement_creatives=engagement_creatives,
+        top_message_creatives=message_creatives,
+        top_purchase_creatives=purchase_creatives,
         weak_creatives=weak_creatives,
         low_data_creatives=low_data_creatives,
         age_breakdown=payload["age_breakdown"],
