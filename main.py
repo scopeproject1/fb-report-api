@@ -15,18 +15,23 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 MODEL = "gpt-4.1-mini"
 MAX_CREATIVE_CARDS = 120
+LOW_DATA_MIN_RESULTS = 3
+LOW_DATA_MIN_SPEND = 1.0
 
 
 @app.get("/")
 def root():
-    return {"status": "running", "version": "media-buying-engine-v2-no-score"}
+    return {"status": "running", "version": "media-buying-engine-v3-refined"}
 
 
 def money(v):
     if v is None:
         return "-"
     try:
-        return f"${float(v):,.2f}"
+        value = float(v)
+        if 0 < value < 0.01:
+            return "<$0.01"
+        return f"${value:,.2f}"
     except Exception:
         return "$0.00"
 
@@ -174,6 +179,9 @@ def classify_creative(category, results, spent, cpr, cpm, frequency):
         elif frequency >= 1.8:
             fatigue_risk = "Medium"
 
+    if results < LOW_DATA_MIN_RESULTS and spent < LOW_DATA_MIN_SPEND:
+        return "Low Data", "Insufficient Data", "Collect more data before decision", fatigue_risk
+
     if category == "ENGAGEMENT":
         if results >= 1000 and cpr is not None and cpr <= 0.02:
             return "Strong Performer", "Efficient", "Increase budget cautiously", fatigue_risk
@@ -190,9 +198,9 @@ def classify_creative(category, results, spent, cpr, cpm, frequency):
             return "Strong Performer", "Efficient", "Increase budget cautiously", fatigue_risk
         if results >= 4 and cpr is not None and cpr <= 0.60:
             return "Good Performer", "Balanced", "Keep stable and test variations", fatigue_risk
-        if cpr is not None and cpr <= 0.90:
+        if results >= 3 and cpr is not None and cpr <= 0.90:
             return "Needs Optimization", "Expensive / Weak", "Reduce budget or improve creative", fatigue_risk
-        if spent >= 1:
+        if spent >= 1 and cpr is not None and cpr > 0.90:
             return "Pause Candidate", "Inefficient", "Reduce or pause budget", fatigue_risk
         return "Low Data", "Insufficient Data", "Collect more data before decision", fatigue_risk
 
@@ -225,7 +233,7 @@ def build_creatives(df):
         messaging = safe_sum(sub, "Messaging conversations started")
         purchase_value = safe_sum(sub, "Purchases conversion value")
 
-        cpr = round(spent / results, 2) if results else None
+        cpr = round(spent / results, 4) if results else None
         cpm = round((spent / impressions) * 1000, 2) if impressions else None
         frequency = round(impressions / reach, 2) if reach else None
         roas = round(purchase_value / spent, 2) if purchase_value and spent else None
@@ -303,7 +311,7 @@ def summarize_category(items):
         "results": total_results,
         "reach": total_reach,
         "impressions": total_impressions,
-        "avg_cpr_usd": round(total_spent / total_results, 2) if total_results else None,
+        "avg_cpr_usd": round(total_spent / total_results, 4) if total_results else None,
         "avg_cpm_usd": round((total_spent / total_impressions) * 1000, 2) if total_impressions else None,
         "frequency": round(total_impressions / total_reach, 2) if total_reach else None,
     }
@@ -351,22 +359,59 @@ def top_items(items, limit=10):
 
 
 def weak_items(items, limit=10):
+    filtered = [
+        c for c in items
+        if c["performance_label"] in ["Pause Candidate", "Needs Optimization"]
+        and c["performance_label"] != "Low Data"
+        and c["spent"] >= 1
+    ]
+
     label_rank = {
         "Pause Candidate": 1,
         "Needs Optimization": 2,
-        "Low Data": 3,
-        "Good Performer": 4,
-        "Strong Performer": 5,
     }
 
     return sorted(
-        items,
+        filtered,
         key=lambda x: (
             label_rank.get(x["performance_label"], 9),
             -x["spent"],
             x["results"]
         )
     )[:limit]
+
+
+def low_data_items(items, limit=10):
+    return sorted(
+        [c for c in items if c["performance_label"] == "Low Data"],
+        key=lambda x: (-x["spent"], -x["results"])
+    )[:limit]
+
+
+def result_category_breakdown(creatives):
+    categories = {}
+
+    for c in creatives:
+        cat = c["result_category"]
+        if cat not in categories:
+            categories[cat] = {
+                "name": cat,
+                "cards": 0,
+                "results": 0,
+                "spend_usd": 0
+            }
+
+        categories[cat]["cards"] += 1
+        categories[cat]["results"] += c["results"]
+        categories[cat]["spend_usd"] += c["spent"]
+
+    output = []
+    for item in categories.values():
+        item["spend_usd"] = round(item["spend_usd"], 2)
+        item["avg_cpr_usd"] = round(item["spend_usd"] / item["results"], 4) if item["results"] else None
+        output.append(item)
+
+    return sorted(output, key=lambda x: x["results"], reverse=True)
 
 
 def ai_analysis(payload):
@@ -387,7 +432,8 @@ def ai_analysis(payload):
 - არ შეადარო Engagement results და Message results როგორც ერთნაირი შედეგი.
 - Engagement creatives შეაფასე engagement-ის ჭრილში.
 - Message creatives შეაფასე cost per message / messages-ის ჭრილში.
-- არ გამოიყენო ქულა/score. გამოიყენე მხოლოდ status, CPR, results, spend, CPM, frequency.
+- არ გამოიყენო ქულა/score.
+- Low Data creatives-ზე არ გასცე მკაცრი pause/reduce რეკომენდაცია.
 - არ გამოიყენო ზოგადი რეკომენდაცია, რომელიც მონაცემიდან არ გამომდინარეობს.
 
 მონაცემები:
@@ -402,10 +448,11 @@ def ai_analysis(payload):
 4. Message creatives analysis
 5. Strong performers
 6. Pause / optimization candidates
-7. Audience insights — მხოლოდ არსებული მონაცემებით
-8. Budget recommendation
-9. მომდევნო თვის action plan
-10. 5 კონკრეტული რეკომენდაცია
+7. Low data creatives
+8. Audience insights — მხოლოდ არსებული მონაცემებით
+9. Budget recommendation
+10. მომდევნო თვის action plan
+11. 5 კონკრეტული რეკომენდაცია
 """
 
     try:
@@ -482,12 +529,13 @@ async def process_report(
     total_messaging = int(safe_sum(df, "Messaging conversations started"))
     total_purchase_value = round(safe_sum(df, "Purchases conversion value"), 2)
 
-    avg_cpr = round(total_spent / total_results, 2) if total_results else None
+    avg_cpr = round(total_spent / total_results, 4) if total_results else None
     avg_cpm = round((total_spent / total_impressions) * 1000, 2) if total_impressions else None
     avg_frequency = round(total_impressions / total_reach, 2) if total_reach else None
     total_roas = round(total_purchase_value / total_spent, 2) if total_purchase_value and total_spent else None
 
     weak_creatives = weak_items(creatives, 10)
+    low_data_creatives = low_data_items(creatives, 10)
 
     strong_creatives = [
         c for c in creatives
@@ -498,6 +546,8 @@ async def process_report(
         c for c in creatives
         if c["performance_label"] == "Pause Candidate"
     ]
+
+    category_breakdown = result_category_breakdown(creatives)
 
     payload = {
         "brand": brand,
@@ -523,15 +573,16 @@ async def process_report(
             "creative_count": len(creatives),
         },
         "category_totals": category_totals,
+        "result_category_breakdown": category_breakdown,
         "top_engagement_creatives": engagement_creatives,
         "top_message_creatives": message_creatives,
         "top_purchase_creatives": purchase_creatives,
         "strong_creatives": strong_creatives[:10],
         "weak_creatives": weak_creatives,
         "pause_candidates": pause_candidates[:10],
+        "low_data_creatives": low_data_creatives,
         "age_breakdown": breakdown(df, "Age"),
         "gender_breakdown": breakdown(df, "Gender"),
-        "objective_breakdown": breakdown(df, "Objective"),
     }
 
     ai_text = ai_analysis(payload)
@@ -567,9 +618,10 @@ async def process_report(
         creatives=creatives,
         top_creatives=engagement_creatives + message_creatives + purchase_creatives,
         weak_creatives=weak_creatives,
+        low_data_creatives=low_data_creatives,
         age_breakdown=payload["age_breakdown"],
         gender_breakdown=payload["gender_breakdown"],
-        objective_breakdown=payload["objective_breakdown"],
+        category_breakdown=category_breakdown,
         ai_text=ai_text,
         money=money,
         num=num,
