@@ -19,7 +19,7 @@ MAX_CREATIVE_CARDS = 120
 
 @app.get("/")
 def root():
-    return {"status": "running", "version": "objective-aware-v1"}
+    return {"status": "running", "version": "objective-aware-v2"}
 
 
 def money(v):
@@ -131,6 +131,7 @@ def sum_by_column(rows, group_col, value_col="Results"):
         key = clean_text(row.get(group_col, ""))
         if not key:
             continue
+
         value = row.get(value_col, 0) or 0
         result[key] = result.get(key, 0) + float(value)
 
@@ -152,7 +153,11 @@ def best_segment(rows, group_col):
     top = data[0]
     share = round((top["value"] / total) * 100, 1) if total else 0
 
-    return {"name": top["name"], "value": top["value"], "share": share}
+    return {
+        "name": top["name"],
+        "value": top["value"],
+        "share": share
+    }
 
 
 def build_creatives(df):
@@ -253,7 +258,29 @@ def breakdown(df, group_col, metric_col="Results", limit=10):
 
 def category_summary(creatives, category):
     items = [c for c in creatives if c["result_category"] == category]
-    return sorted(items, key=lambda x: (x["results"], -x["cpr"] if x["cpr"] else 0), reverse=True)[:10]
+    return sorted(
+        items,
+        key=lambda x: (x["results"], -(x["cpr"] or 0)),
+        reverse=True
+    )[:10]
+
+
+def summarize_category(items):
+    total_spent = round(sum(c["spent"] for c in items), 2)
+    total_results = sum(c["results"] for c in items)
+    total_reach = sum(c["reach"] for c in items)
+    total_impressions = sum(c["impressions"] for c in items)
+
+    return {
+        "count": len(items),
+        "spent_usd": total_spent,
+        "results": total_results,
+        "reach": total_reach,
+        "impressions": total_impressions,
+        "avg_cpr_usd": round(total_spent / total_results, 2) if total_results else None,
+        "avg_cpm_usd": round((total_spent / total_impressions) * 1000, 2) if total_impressions else None,
+        "frequency": round(total_impressions / total_reach, 2) if total_reach else None,
+    }
 
 
 def ai_analysis(payload):
@@ -261,29 +288,34 @@ def ai_analysis(payload):
 შენ ხარ senior Meta Ads analyst.
 
 მონაცემები მოდის Meta Ads Manager Raw XLSX export-იდან.
-ყველა monetary value არის USD-ში, არა GEL-ში.
-არასოდეს გამოიყენო სიტყვა "ლარი". გამოიყენე მხოლოდ "USD" ან "დოლარი".
 
-მნიშვნელოვანი:
-- Raw rows ჩაშლილია age/gender/day breakdown-ებად.
-- Creatives დაჯგუფებულია ასე: Ad name + Campaign name + Page name + Result Category.
-- ერთი და იგივე პოსტი შეიძლება ცალკე იყოს ENGAGEMENT და MESSAGES კატეგორიებში. ეს სწორია.
-- არ შეადარო Post Engagements და Messaging Conversations პირდაპირ როგორც ერთი ტიპის result.
-- არ გამოიგონო ვიდეო/carousel/placement/format, თუ მონაცემში არ ჩანს.
-- თუ დასკვნა არის ვარაუდი, დაწერე როგორც ვარაუდი.
+მკაცრი წესები:
+- ყველა monetary value არის USD-ში.
+- არასოდეს გამოიყენო სიტყვა "ლარი".
+- გამოიყენე მხოლოდ "USD" ან "დოლარი".
+- არ გამოიგონო მონაცემი, პროცენტი, placement, format, video/carousel, behavior assumption.
+- თუ მონაცემი პირდაპირ არ ჩანს payload-ში, არ დაწერო როგორც ფაქტი.
+- თუ აკეთებ ვარაუდს, აუცილებლად დაწერე: "სავარაუდოდ".
+- ROAS არ დაწერო 0-ად, თუ purchase_value_usd ან purchases არ არის.
+- თუ purchases = 0, დაწერე: "ROAS არ არის დათვლადი, რადგან purchase data არ ფიქსირდება."
+- არ შეადარო Engagement results და Message results როგორც ერთნაირი შედეგი.
+- Engagement creatives შეაფასე engagement-ის ჭრილში.
+- Message creatives შეაფასე cost per message / messages-ის ჭრილში.
+- თუ პროცენტი არ არის payload-ში, არ დაწერო პროცენტი.
+- არ გამოიყენო ზოგადი რეკომენდაცია, რომელიც მონაცემიდან არ გამომდინარეობს.
 
 მონაცემები:
 {json.dumps(payload, ensure_ascii=False, indent=2)}
 
-დაწერე ქართულად, მოკლედ, მაგრამ ღირებულად.
+დაწერე ქართულად, მკაფიოდ და მოკლედ.
 
 სტრუქტურა:
 1. Executive Summary
 2. KPI შეფასება USD-ში
-3. ENGAGEMENT creatives analysis
-4. MESSAGES creatives analysis
+3. Engagement creatives analysis
+4. Message creatives analysis
 5. სუსტი/ძვირი creatives
-6. Audience insights — ასაკი და სქესი
+6. Audience insights — მხოლოდ არსებული მონაცემებით
 7. Budget efficiency
 8. მომდევნო თვის action plan
 9. 5 კონკრეტული რეკომენდაცია
@@ -295,13 +327,21 @@ def ai_analysis(payload):
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a senior paid media strategist and reporting analyst. Never invent facts not present in the data."
+                    "content": (
+                        "You are a senior paid media reporting analyst. "
+                        "Be strict with data. Do not invent facts, percentages, formats, placements, or currency. "
+                        "All currency is USD."
+                    )
                 },
-                {"role": "user", "content": prompt}
+                {
+                    "role": "user",
+                    "content": prompt
+                }
             ],
-            temperature=0.2
+            temperature=0.1
         )
         return res.choices[0].message.content
+
     except Exception as e:
         return f"AI analysis unavailable: {str(e)}"
 
@@ -348,11 +388,17 @@ async def process_report(
     avg_cpr = round(total_spent / total_results, 2) if total_results else None
     avg_cpm = round((total_spent / total_impressions) * 1000, 2) if total_impressions else None
     avg_frequency = round(total_impressions / total_reach, 2) if total_reach else None
-    total_roas = round(total_purchase_value / total_spent, 2) if total_spent else None
+    total_roas = round(total_purchase_value / total_spent, 2) if total_purchase_value and total_spent else None
 
     engagement_creatives = category_summary(creatives, "ENGAGEMENT")
     message_creatives = category_summary(creatives, "MESSAGES")
     purchase_creatives = category_summary(creatives, "PURCHASES")
+
+    category_totals = {
+        "ENGAGEMENT": summarize_category(engagement_creatives),
+        "MESSAGES": summarize_category(message_creatives),
+        "PURCHASES": summarize_category(purchase_creatives),
+    }
 
     high_cpr_creatives = sorted(
         [c for c in creatives if c["results"] > 0 and c["cpr"] is not None],
@@ -390,6 +436,7 @@ async def process_report(
             "raw_rows": len(df),
             "creative_count": len(creatives),
         },
+        "category_totals": category_totals,
         "top_engagement_creatives": engagement_creatives,
         "top_message_creatives": message_creatives,
         "top_purchase_creatives": purchase_creatives,
