@@ -95,7 +95,7 @@ h3 { font-size: 17px; margin: 0 0 10px; }
   color: white;
   border-radius: 18px;
   padding: 15px;
-  min-height: 225px;
+  min-height: 220px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -124,7 +124,7 @@ h3 { font-size: 17px; margin: 0 0 10px; }
   line-height: 1.35;
 }
 
-.score {
+.status {
   margin-top: 12px;
   padding: 8px 10px;
   border-radius: 12px;
@@ -217,18 +217,29 @@ h3 { font-size: 17px; margin: 0 0 10px; }
     <div class="kpi"><div class="label">Total Spent, USD</div><div class="value">{{ money(totals.spent) }}</div></div>
     <div class="kpi"><div class="label">Reach</div><div class="value">{{ num(totals.reach) }}</div></div>
     <div class="kpi"><div class="label">Impressions</div><div class="value">{{ num(totals.impressions) }}</div></div>
-    <div class="kpi"><div class="label">Total Results</div><div class="value">{{ num(totals.results) }}</div></div>
-    <div class="kpi"><div class="label">Average CPR, USD</div><div class="value">{{ money(totals.avg_cpr) }}</div></div>
+    <div class="kpi"><div class="label">All Results</div><div class="value">{{ num(totals.results) }}</div></div>
+
+    <div class="kpi"><div class="label">Engagement Results</div><div class="value">{{ num(totals.engagement_results) }}</div></div>
+    <div class="kpi"><div class="label">Message Results</div><div class="value">{{ num(totals.message_results) }}</div></div>
+
+    <div class="kpi"><div class="label">Cost / Engagement, USD</div><div class="value">{{ money(totals.avg_cost_per_engagement) }}</div></div>
+    <div class="kpi"><div class="label">Cost / Message, USD</div><div class="value">{{ money(totals.avg_cost_per_message) }}</div></div>
+
+    <div class="kpi"><div class="label">Engagement Spend, USD</div><div class="value">{{ money(totals.engagement_spend) }}</div></div>
+    <div class="kpi"><div class="label">Message Spend, USD</div><div class="value">{{ money(totals.message_spend) }}</div></div>
+
     <div class="kpi"><div class="label">Average CPM, USD</div><div class="value">{{ money(totals.avg_cpm) }}</div></div>
     <div class="kpi"><div class="label">Frequency</div><div class="value">{{ totals.avg_frequency or "-" }}</div></div>
+
     <div class="kpi"><div class="label">Report Cards</div><div class="value">{{ totals.creative_count }}</div></div>
     <div class="kpi"><div class="label">Raw Rows Parsed</div><div class="value">{{ totals.raw_rows }}</div></div>
+
     <div class="kpi"><div class="label">ROAS</div><div class="value">{{ totals.roas or "-" }}</div></div>
+    <div class="kpi"><div class="label">Purchases</div><div class="value">{{ num(totals.purchases) }}</div></div>
   </div>
 
   <p class="note">
-    Raw Meta Ads rows are aggregated by Ad name + Campaign name + Page name + Result Category.
-    Same post can appear separately if promoted for Engagement and Messages.
+    Engagement and message results are separated because they represent different campaign objectives.
   </p>
 </section>
 
@@ -239,7 +250,6 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 
 <section class="page">
   <h2>Top Engagement Creatives</h2>
-  <p class="note">Engagement creatives are evaluated separately from messaging creatives.</p>
 
   {% for c in creatives if c.result_category == "ENGAGEMENT" %}
   <div class="card">
@@ -249,9 +259,9 @@ h3 { font-size: 17px; margin: 0 0 10px; }
         <div class="type">Engagement Creative</div>
       </div>
       <div class="name">{{ c.ad_name }}</div>
-      <div class="score">
-        Score: {{ c.performance_score }}/100<br>
+      <div class="status">
         {{ c.performance_label }}<br>
+        {{ c.efficiency_tier }}<br>
         {{ c.budget_recommendation }}
       </div>
     </div>
@@ -265,11 +275,11 @@ h3 { font-size: 17px; margin: 0 0 10px; }
         <div class="metric"><div class="label">CPR, USD</div><div class="value">{{ money(c.cpr) }}</div></div>
         <div class="metric"><div class="label">CPM, USD</div><div class="value">{{ money(c.cpm) }}</div></div>
         <div class="metric"><div class="label">Frequency</div><div class="value">{{ c.frequency or "-" }}</div></div>
+        <div class="metric"><div class="label">Fatigue Risk</div><div class="value">{{ c.fatigue_risk }}</div></div>
         <div class="metric"><div class="label">Best Age</div><div class="value">{{ c.best_age.name }}</div></div>
         <div class="metric"><div class="label">Best Gender</div><div class="value">{{ c.best_gender.name }}</div></div>
         <div class="metric"><div class="label">Weak Age</div><div class="value">{{ c.worst_age.name }}</div></div>
         <div class="metric"><div class="label">Weak Gender</div><div class="value">{{ c.worst_gender.name }}</div></div>
-        <div class="metric"><div class="label">Efficiency</div><div class="value">{{ c.efficiency_tier }}</div></div>
       </div>
       <div class="meta">
         Page: {{ c.page_name }}<br>
@@ -284,7 +294,6 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 
 <section class="page">
   <h2>Top Message Creatives</h2>
-  <p class="note">Messaging creatives are evaluated by messages, cost per message, efficiency and score.</p>
 
   {% for c in creatives if c.result_category == "MESSAGES" %}
   <div class="card">
@@ -294,9 +303,9 @@ h3 { font-size: 17px; margin: 0 0 10px; }
         <div class="type">Message Creative</div>
       </div>
       <div class="name">{{ c.ad_name }}</div>
-      <div class="score">
-        Score: {{ c.performance_score }}/100<br>
+      <div class="status">
         {{ c.performance_label }}<br>
+        {{ c.efficiency_tier }}<br>
         {{ c.budget_recommendation }}
       </div>
     </div>
@@ -310,11 +319,11 @@ h3 { font-size: 17px; margin: 0 0 10px; }
         <div class="metric"><div class="label">Cost / Message</div><div class="value">{{ money(c.cpr) }}</div></div>
         <div class="metric"><div class="label">CPM, USD</div><div class="value">{{ money(c.cpm) }}</div></div>
         <div class="metric"><div class="label">Frequency</div><div class="value">{{ c.frequency or "-" }}</div></div>
+        <div class="metric"><div class="label">Fatigue Risk</div><div class="value">{{ c.fatigue_risk }}</div></div>
         <div class="metric"><div class="label">Best Age</div><div class="value">{{ c.best_age.name }}</div></div>
         <div class="metric"><div class="label">Best Gender</div><div class="value">{{ c.best_gender.name }}</div></div>
         <div class="metric"><div class="label">Weak Age</div><div class="value">{{ c.worst_age.name }}</div></div>
         <div class="metric"><div class="label">Weak Gender</div><div class="value">{{ c.worst_gender.name }}</div></div>
-        <div class="metric"><div class="label">Efficiency</div><div class="value">{{ c.efficiency_tier }}</div></div>
       </div>
       <div class="meta">
         Page: {{ c.page_name }}<br>
@@ -328,20 +337,19 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 </section>
 
 <section class="page">
-  <h2>Weak / Pause Candidates</h2>
-  <p class="note">Sorted by media-buying performance score, spend efficiency and low result volume.</p>
+  <h2>Weak / Optimization Candidates</h2>
 
   {% for c in weak_creatives %}
   <div class="card">
     <div class="visual weak">
       <div>
         <div class="id">W{{ "%02d"|format(loop.index) }}</div>
-        <div class="type">Needs Optimization</div>
+        <div class="type">Optimization Candidate</div>
       </div>
       <div class="name">{{ c.ad_name }}</div>
-      <div class="score">
-        Score: {{ c.performance_score }}/100<br>
+      <div class="status">
         {{ c.performance_label }}<br>
+        {{ c.efficiency_tier }}<br>
         {{ c.budget_recommendation }}
       </div>
     </div>
@@ -355,9 +363,9 @@ h3 { font-size: 17px; margin: 0 0 10px; }
         <div class="metric"><div class="label">Reach</div><div class="value">{{ num(c.reach) }}</div></div>
         <div class="metric"><div class="label">Impressions</div><div class="value">{{ num(c.impressions) }}</div></div>
         <div class="metric"><div class="label">Frequency</div><div class="value">{{ c.frequency or "-" }}</div></div>
+        <div class="metric"><div class="label">Fatigue Risk</div><div class="value">{{ c.fatigue_risk }}</div></div>
         <div class="metric"><div class="label">Best Age</div><div class="value">{{ c.best_age.name }}</div></div>
         <div class="metric"><div class="label">Best Gender</div><div class="value">{{ c.best_gender.name }}</div></div>
-        <div class="metric"><div class="label">Efficiency</div><div class="value">{{ c.efficiency_tier }}</div></div>
         <div class="metric"><div class="label">Weak Age</div><div class="value">{{ c.worst_age.name }}</div></div>
         <div class="metric"><div class="label">Weak Gender</div><div class="value">{{ c.worst_gender.name }}</div></div>
       </div>
@@ -409,9 +417,6 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 
 <section class="page">
   <h2>All Report Cards</h2>
-  <p class="note">
-    Each card represents one post/ad under one result category.
-  </p>
 
   {% for c in creatives %}
   <div class="card">
@@ -421,9 +426,9 @@ h3 { font-size: 17px; margin: 0 0 10px; }
         <div class="type">{{ c.result_category }}</div>
       </div>
       <div class="name">{{ c.ad_name }}</div>
-      <div class="score">
-        Score: {{ c.performance_score }}/100<br>
+      <div class="status">
         {{ c.performance_label }}<br>
+        {{ c.efficiency_tier }}<br>
         {{ c.budget_recommendation }}
       </div>
     </div>
@@ -437,8 +442,8 @@ h3 { font-size: 17px; margin: 0 0 10px; }
         <div class="metric"><div class="label">CPR, USD</div><div class="value">{{ money(c.cpr) }}</div></div>
         <div class="metric"><div class="label">CPM, USD</div><div class="value">{{ money(c.cpm) }}</div></div>
         <div class="metric"><div class="label">Frequency</div><div class="value">{{ c.frequency or "-" }}</div></div>
-        <div class="metric"><div class="label">Score</div><div class="value">{{ c.performance_score }}/100</div></div>
-        <div class="metric"><div class="label">Label</div><div class="value">{{ c.performance_label }}</div></div>
+        <div class="metric"><div class="label">Fatigue Risk</div><div class="value">{{ c.fatigue_risk }}</div></div>
+        <div class="metric"><div class="label">Status</div><div class="value">{{ c.performance_label }}</div></div>
         <div class="metric"><div class="label">Best Age</div><div class="value">{{ c.best_age.name }}</div></div>
         <div class="metric"><div class="label">Best Gender</div><div class="value">{{ c.best_gender.name }}</div></div>
         <div class="metric"><div class="label">Efficiency</div><div class="value">{{ c.efficiency_tier }}</div></div>
