@@ -44,15 +44,8 @@ body {
 .small { color: #6b7280; font-size: 12px; }
 .cover .small { color: #d1d5db; }
 
-h2 {
-  font-size: 27px;
-  margin: 0 0 20px;
-}
-
-h3 {
-  font-size: 17px;
-  margin: 0 0 10px;
-}
+h2 { font-size: 27px; margin: 0 0 20px; }
+h3 { font-size: 17px; margin: 0 0 10px; }
 
 .grid {
   display: grid;
@@ -102,31 +95,17 @@ h3 {
   color: white;
   border-radius: 18px;
   padding: 15px;
-  min-height: 205px;
+  min-height: 225px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
 
-.visual.engagement {
-  background: linear-gradient(160deg, #111827, #374151);
-}
-
-.visual.messages {
-  background: linear-gradient(160deg, #064e3b, #047857);
-}
-
-.visual.purchases {
-  background: linear-gradient(160deg, #7c2d12, #ea580c);
-}
-
-.visual.other {
-  background: linear-gradient(160deg, #312e81, #4f46e5);
-}
-
-.visual.weak {
-  background: linear-gradient(160deg, #7f1d1d, #991b1b);
-}
+.visual.engagement { background: linear-gradient(160deg, #111827, #374151); }
+.visual.messages { background: linear-gradient(160deg, #064e3b, #047857); }
+.visual.purchases { background: linear-gradient(160deg, #7c2d12, #ea580c); }
+.visual.other { background: linear-gradient(160deg, #312e81, #4f46e5); }
+.visual.weak { background: linear-gradient(160deg, #7f1d1d, #991b1b); }
 
 .visual .id {
   font-size: 34px;
@@ -143,6 +122,15 @@ h3 {
   font-size: 14px;
   font-weight: 700;
   line-height: 1.35;
+}
+
+.score {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.16);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .metrics {
@@ -200,16 +188,6 @@ h3 {
   margin-bottom: 14px;
 }
 
-.section-chip {
-  display: inline-block;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: #f3f4f6;
-  font-size: 11px;
-  font-weight: 700;
-  margin-bottom: 12px;
-}
-
 .split {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -243,14 +221,14 @@ h3 {
     <div class="kpi"><div class="label">Average CPR, USD</div><div class="value">{{ money(totals.avg_cpr) }}</div></div>
     <div class="kpi"><div class="label">Average CPM, USD</div><div class="value">{{ money(totals.avg_cpm) }}</div></div>
     <div class="kpi"><div class="label">Frequency</div><div class="value">{{ totals.avg_frequency or "-" }}</div></div>
-    <div class="kpi"><div class="label">Unique Report Cards</div><div class="value">{{ totals.creative_count }}</div></div>
+    <div class="kpi"><div class="label">Report Cards</div><div class="value">{{ totals.creative_count }}</div></div>
     <div class="kpi"><div class="label">Raw Rows Parsed</div><div class="value">{{ totals.raw_rows }}</div></div>
     <div class="kpi"><div class="label">ROAS</div><div class="value">{{ totals.roas or "-" }}</div></div>
   </div>
 
   <p class="note">
     Raw Meta Ads rows are aggregated by Ad name + Campaign name + Page name + Result Category.
-    Same post can appear separately if it was promoted for Engagement and Messages.
+    Same post can appear separately if promoted for Engagement and Messages.
   </p>
 </section>
 
@@ -261,9 +239,7 @@ h3 {
 
 <section class="page">
   <h2>Top Engagement Creatives</h2>
-  <p class="note">
-    These cards represent creatives optimized for post engagement. They should not be directly compared with message campaigns.
-  </p>
+  <p class="note">Engagement creatives are evaluated separately from messaging creatives.</p>
 
   {% for c in creatives if c.result_category == "ENGAGEMENT" %}
   <div class="card">
@@ -273,6 +249,11 @@ h3 {
         <div class="type">Engagement Creative</div>
       </div>
       <div class="name">{{ c.ad_name }}</div>
+      <div class="score">
+        Score: {{ c.performance_score }}/100<br>
+        {{ c.performance_label }}<br>
+        {{ c.budget_recommendation }}
+      </div>
     </div>
     <div>
       <h3>{{ c.ad_name }}</h3>
@@ -286,6 +267,9 @@ h3 {
         <div class="metric"><div class="label">Frequency</div><div class="value">{{ c.frequency or "-" }}</div></div>
         <div class="metric"><div class="label">Best Age</div><div class="value">{{ c.best_age.name }}</div></div>
         <div class="metric"><div class="label">Best Gender</div><div class="value">{{ c.best_gender.name }}</div></div>
+        <div class="metric"><div class="label">Weak Age</div><div class="value">{{ c.worst_age.name }}</div></div>
+        <div class="metric"><div class="label">Weak Gender</div><div class="value">{{ c.worst_gender.name }}</div></div>
+        <div class="metric"><div class="label">Efficiency</div><div class="value">{{ c.efficiency_tier }}</div></div>
       </div>
       <div class="meta">
         Page: {{ c.page_name }}<br>
@@ -300,9 +284,7 @@ h3 {
 
 <section class="page">
   <h2>Top Message Creatives</h2>
-  <p class="note">
-    These cards represent creatives optimized for messaging conversations.
-  </p>
+  <p class="note">Messaging creatives are evaluated by messages, cost per message, efficiency and score.</p>
 
   {% for c in creatives if c.result_category == "MESSAGES" %}
   <div class="card">
@@ -312,6 +294,11 @@ h3 {
         <div class="type">Message Creative</div>
       </div>
       <div class="name">{{ c.ad_name }}</div>
+      <div class="score">
+        Score: {{ c.performance_score }}/100<br>
+        {{ c.performance_label }}<br>
+        {{ c.budget_recommendation }}
+      </div>
     </div>
     <div>
       <h3>{{ c.ad_name }}</h3>
@@ -320,11 +307,14 @@ h3 {
         <div class="metric"><div class="label">Reach</div><div class="value">{{ num(c.reach) }}</div></div>
         <div class="metric"><div class="label">Impressions</div><div class="value">{{ num(c.impressions) }}</div></div>
         <div class="metric"><div class="label">Spend, USD</div><div class="value">{{ money(c.spent) }}</div></div>
-        <div class="metric"><div class="label">Cost / Message, USD</div><div class="value">{{ money(c.cpr) }}</div></div>
+        <div class="metric"><div class="label">Cost / Message</div><div class="value">{{ money(c.cpr) }}</div></div>
         <div class="metric"><div class="label">CPM, USD</div><div class="value">{{ money(c.cpm) }}</div></div>
         <div class="metric"><div class="label">Frequency</div><div class="value">{{ c.frequency or "-" }}</div></div>
         <div class="metric"><div class="label">Best Age</div><div class="value">{{ c.best_age.name }}</div></div>
         <div class="metric"><div class="label">Best Gender</div><div class="value">{{ c.best_gender.name }}</div></div>
+        <div class="metric"><div class="label">Weak Age</div><div class="value">{{ c.worst_age.name }}</div></div>
+        <div class="metric"><div class="label">Weak Gender</div><div class="value">{{ c.worst_gender.name }}</div></div>
+        <div class="metric"><div class="label">Efficiency</div><div class="value">{{ c.efficiency_tier }}</div></div>
       </div>
       <div class="meta">
         Page: {{ c.page_name }}<br>
@@ -338,10 +328,8 @@ h3 {
 </section>
 
 <section class="page">
-  <h2>Weak / Inefficient Creatives</h2>
-  <p class="note">
-    This section prioritizes high-cost or low-result cards within their own result category.
-  </p>
+  <h2>Weak / Pause Candidates</h2>
+  <p class="note">Sorted by media-buying performance score, spend efficiency and low result volume.</p>
 
   {% for c in weak_creatives %}
   <div class="card">
@@ -351,6 +339,11 @@ h3 {
         <div class="type">Needs Optimization</div>
       </div>
       <div class="name">{{ c.ad_name }}</div>
+      <div class="score">
+        Score: {{ c.performance_score }}/100<br>
+        {{ c.performance_label }}<br>
+        {{ c.budget_recommendation }}
+      </div>
     </div>
     <div>
       <h3>{{ c.ad_name }}</h3>
@@ -364,6 +357,9 @@ h3 {
         <div class="metric"><div class="label">Frequency</div><div class="value">{{ c.frequency or "-" }}</div></div>
         <div class="metric"><div class="label">Best Age</div><div class="value">{{ c.best_age.name }}</div></div>
         <div class="metric"><div class="label">Best Gender</div><div class="value">{{ c.best_gender.name }}</div></div>
+        <div class="metric"><div class="label">Efficiency</div><div class="value">{{ c.efficiency_tier }}</div></div>
+        <div class="metric"><div class="label">Weak Age</div><div class="value">{{ c.worst_age.name }}</div></div>
+        <div class="metric"><div class="label">Weak Gender</div><div class="value">{{ c.worst_gender.name }}</div></div>
       </div>
       <div class="meta">
         Campaign: {{ c.campaign_name }}<br>
@@ -414,8 +410,7 @@ h3 {
 <section class="page">
   <h2>All Report Cards</h2>
   <p class="note">
-    Each card below represents one post/ad under one result category.
-    If the same post was promoted for Engagement and Messages, it appears as separate cards.
+    Each card represents one post/ad under one result category.
   </p>
 
   {% for c in creatives %}
@@ -426,6 +421,11 @@ h3 {
         <div class="type">{{ c.result_category }}</div>
       </div>
       <div class="name">{{ c.ad_name }}</div>
+      <div class="score">
+        Score: {{ c.performance_score }}/100<br>
+        {{ c.performance_label }}<br>
+        {{ c.budget_recommendation }}
+      </div>
     </div>
     <div>
       <h3>{{ c.ad_name }}</h3>
@@ -437,14 +437,18 @@ h3 {
         <div class="metric"><div class="label">CPR, USD</div><div class="value">{{ money(c.cpr) }}</div></div>
         <div class="metric"><div class="label">CPM, USD</div><div class="value">{{ money(c.cpm) }}</div></div>
         <div class="metric"><div class="label">Frequency</div><div class="value">{{ c.frequency or "-" }}</div></div>
+        <div class="metric"><div class="label">Score</div><div class="value">{{ c.performance_score }}/100</div></div>
+        <div class="metric"><div class="label">Label</div><div class="value">{{ c.performance_label }}</div></div>
         <div class="metric"><div class="label">Best Age</div><div class="value">{{ c.best_age.name }}</div></div>
         <div class="metric"><div class="label">Best Gender</div><div class="value">{{ c.best_gender.name }}</div></div>
+        <div class="metric"><div class="label">Efficiency</div><div class="value">{{ c.efficiency_tier }}</div></div>
       </div>
       <div class="meta">
         Page: {{ c.page_name }}<br>
         Campaign: {{ c.campaign_name }}<br>
         Objective: {{ c.objective }}<br>
         Result type: {{ c.result_type }}<br>
+        Recommendation: {{ c.budget_recommendation }}<br>
         Raw rows merged: {{ c.raw_rows }}
       </div>
     </div>
