@@ -23,7 +23,7 @@ LOW_DATA_MIN_SPEND = 1.0
 def root():
     return {
         "status": "running",
-        "version": "media-buying-engine-v10-enterprise-production"
+        "version": "media-buying-engine-v10-enterprise-production-final"
     }
 
 
@@ -162,6 +162,7 @@ def sum_by_column(rows, group_col, value_col="Results"):
         key = clean_text(row.get(group_col, ""))
         if not key:
             continue
+
         value = row.get(value_col, 0) or 0
         result[key] = result.get(key, 0) + float(value)
 
@@ -173,6 +174,7 @@ def sum_by_column(rows, group_col, value_col="Results"):
 
 def add_share_to_breakdown(items):
     total = sum(item["value"] for item in items)
+
     return [
         {
             "name": item["name"],
@@ -197,12 +199,10 @@ def segment_summary(rows, group_col):
         }
 
     data = add_share_to_breakdown(data)
-    best = data[0]
-    worst = data[-1]
 
     return {
-        "best": best,
-        "worst": worst,
+        "best": data[0],
+        "worst": data[-1],
         "breakdown": data[:5]
     }
 
@@ -218,19 +218,9 @@ def engagement_score(results, spent, cpr):
     return round((volume_component + efficiency_component) * spend_confidence, 2)
 
 
-def message_score(results, spent, cpr):
-    if not results or not cpr:
-        return 0
-
-    volume_component = results * 8
-    efficiency_component = (1 / cpr) * 4
-    spend_confidence = min(spent / 3, 1)
-
-    return round((volume_component + efficiency_component) * spend_confidence, 2)
-
-
 def classify_creative(category, results, spent, cpr, cpm, frequency):
     fatigue_risk = "Low"
+
     if frequency is not None:
         if frequency >= 2.5:
             fatigue_risk = "High"
@@ -263,12 +253,10 @@ def classify_creative(category, results, spent, cpr, cpm, frequency):
         return "Needs Optimization", "Moderate", "Keep limited budget and improve creative", fatigue_risk
 
     if category == "MESSAGES":
-        score = message_score(results, spent, cpr)
-
         if results >= 15 and cpr is not None and cpr <= 0.40 and spent >= 3:
             return "Strong Performer", "Efficient", "Increase budget cautiously", fatigue_risk
 
-        if score >= 45 or (results >= 4 and cpr is not None and cpr <= 0.60):
+        if results >= 4 and cpr is not None and cpr <= 0.60:
             return "Good Performer", "Balanced", "Maintain budget and test variations", fatigue_risk
 
         if results >= 3 and cpr is not None and cpr <= 0.90:
@@ -697,15 +685,8 @@ async def process_report(
     weak_message_creatives = weak_items(message_creatives_all, 10)
     low_data_creatives = low_data_items(creatives, 10)
 
-    strong_creatives = [
-        c for c in creatives
-        if c["performance_label"] == "Strong Performer"
-    ]
-
-    good_creatives = [
-        c for c in creatives
-        if c["performance_label"] == "Good Performer"
-    ]
+    strong_creatives = [c for c in creatives if c["performance_label"] == "Strong Performer"]
+    good_creatives = [c for c in creatives if c["performance_label"] == "Good Performer"]
 
     needs_optimization_by_category = {
         "ENGAGEMENT": [
