@@ -227,7 +227,7 @@ def classify_creative(category, results, spent, cpr, cpm, frequency):
         if results >= 4 and cpr is not None and cpr <= 0.60:
             return "Good Performer", "Balanced", "Maintain budget and test variations", fatigue_risk
         if results >= 3 and cpr is not None and cpr <= 0.90:
-            return "Needs Optimization", "Expensive / Weak", "Reduce budget or improve creative", fatigue_risk
+            return "Needs Optimization", "Expensive", "Reduce budget or improve creative", fatigue_risk
         if spent >= 3 and results >= 3 and cpr is not None and cpr > 0.90:
             return "Pause Candidate", "Inefficient", "Reduce budget or replace creative", fatigue_risk
         if spent >= 1 and results < 3:
@@ -330,7 +330,8 @@ def summarize_category(items):
     total_impressions = sum(c["impressions"] for c in items)
 
     return {
-        "count": len(items),
+        "creative_count": len(items),
+        "report_card_count": len(items),
         "spent_usd": total_spent,
         "results": total_results,
         "summed_reach": total_summed_reach,
@@ -415,6 +416,18 @@ def low_data_items(items, limit=10):
     )[:limit]
 
 
+def without_audience_fields(creative):
+    excluded = {
+        "best_age",
+        "worst_age",
+        "age_breakdown",
+        "best_gender",
+        "worst_gender",
+        "gender_breakdown",
+    }
+    return {k: v for k, v in creative.items() if k not in excluded}
+
+
 def result_category_breakdown(creatives):
     categories = {}
 
@@ -423,12 +436,12 @@ def result_category_breakdown(creatives):
         if cat not in categories:
             categories[cat] = {
                 "name": cat,
-                "cards": 0,
+                "report_cards": 0,
                 "results": 0,
                 "spend_usd": 0
             }
 
-        categories[cat]["cards"] += 1
+        categories[cat]["report_cards"] += 1
         categories[cat]["results"] += c["results"]
         categories[cat]["spend_usd"] += c["spent"]
 
@@ -481,11 +494,18 @@ Important rules:
 - Use "Summed Reach" or "Reach from breakdown rows"; do not present reach as guaranteed unique reach.
 - Do not mention delivery status or use the words active, inactive, paused.
 - Do not invent targeting, placements, formats, or percentages.
+- Never call report cards or creatives "campaigns". If using category counts, write "creatives" or "report cards".
+- The category_totals creative_count/report_card_count fields are not campaign counts.
 - Do not make behavioral audience claims such as men/women being more active or targeting should focus on a gender.
 - Audience wording must describe result distribution only. Use phrasing like:
   "ამ მონაცემებში male სეგმენტზე მოდის შედეგების ყველაზე დიდი წილი."
   "მოცემულ creatives-ში female სეგმენტი ჩანს best gender-ად."
   "This is result distribution, not confirmed targeting performance."
+- Do not generalize a single creative's best_age/best_gender or creative-level audience share to the whole result category.
+- For Message Analysis, only use total Message category audience percentages from category_audience_breakdowns.MESSAGES.
+- If a filtered Message category audience breakdown is not available, write only that "ზოგიერთ message creative-ში female/male სეგმენტი best gender-ად ჩანს" based on creative-level fields.
+- When category_audience_breakdowns.MESSAGES is provided, use it for total Message audience distribution. Do not use a single message creative's best_gender percentage as the total Message category percentage.
+- Do not write audience percentages for Low Data creatives. Low Data audience observations must stay qualitative or be omitted.
 - Low Data creatives must appear only in the Low Data Creatives section and must not be called weak, strong, underperforming, or a pause recommendation.
 - Top performer sections exclude Low Data and Pause Candidate creatives.
 - Needs Optimization and Pause Candidates must be discussed separately.
@@ -531,6 +551,8 @@ Required output structure:
                         "Use only provided data. All currency is USD. "
                         "Do not mention delivery status. "
                         "Do not invent targeting, formats, placements, percentages, or labels. "
+                        "Never call creatives or report cards campaigns. "
+                        "Do not use Low Data audience percentages. "
                         "Write naturally and concisely in Georgian."
                     )
                 },
@@ -571,6 +593,9 @@ async def process_report(
 
     for col in numeric_cols:
         df = to_number(df, col)
+
+    df_with_category = df.copy()
+    df_with_category["_result_category"] = df_with_category.apply(detect_result_category, axis=1)
 
     creatives = build_creatives(df)
 
@@ -669,9 +694,27 @@ async def process_report(
         "needs_optimization": needs_optimization[:10],
         "weak_creatives": weak_creatives,
         "pause_candidates": pause_candidates[:10],
-        "low_data_creatives": low_data_creatives,
+        "low_data_creatives": [without_audience_fields(c) for c in low_data_creatives],
         "age_breakdown": breakdown(df, "Age"),
         "gender_breakdown": breakdown(df, "Gender"),
+        "category_audience_breakdowns": {
+            "ENGAGEMENT": {
+                "age_breakdown": breakdown(
+                    df_with_category[df_with_category["_result_category"] == "ENGAGEMENT"], "Age"
+                ),
+                "gender_breakdown": breakdown(
+                    df_with_category[df_with_category["_result_category"] == "ENGAGEMENT"], "Gender"
+                ),
+            },
+            "MESSAGES": {
+                "age_breakdown": breakdown(
+                    df_with_category[df_with_category["_result_category"] == "MESSAGES"], "Age"
+                ),
+                "gender_breakdown": breakdown(
+                    df_with_category[df_with_category["_result_category"] == "MESSAGES"], "Gender"
+                ),
+            },
+        },
     }
 
     ai_text = ai_analysis(payload)
