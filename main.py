@@ -551,6 +551,19 @@ You are a senior Meta Ads analyst and media buyer.
 Write a concise, professional Georgian-language report based only on the JSON payload.
 Keep the visible report natural, client-ready, and business-oriented.
 
+CRITICAL LABEL RULES:
+- performance_label is the source of truth.
+- Never change, upgrade, downgrade, reinterpret, or rename a creative's performance_label.
+- A creative may be mentioned in Strong Performers ONLY if performance_label == "Strong Performer".
+- A creative may be mentioned in Good / Stable Performers ONLY if performance_label == "Good Performer".
+- A creative may be mentioned in Needs Optimization ONLY if performance_label == "Needs Optimization".
+- A creative may be mentioned in Pause Candidates ONLY if performance_label == "Pause Candidate".
+- A creative may be mentioned in Low Data Creatives ONLY if performance_label == "Low Data".
+- Do not call a Good Performer "strong", "strong performer", or "best performer".
+- Use "stable", "good", or "maintain/test" for Good Performer creatives.
+- Do not call Needs Optimization creatives "good" or "stable".
+- Do not call Low Data creatives weak, strong, good, bad, or pause candidates.
+
 Important rules:
 - All currency is USD. Never write GEL or "ლარი".
 - Use "Summed Reach" or "Reach from breakdown rows"; do not present reach as guaranteed unique reach.
@@ -574,20 +587,13 @@ Important rules:
   Fatigue Risk,
   Result Category,
   Performance Label.
-- Low Data creatives must appear only in the Low Data Creatives section.
-- Low Data creatives must not be called weak, strong, underperforming, or pause candidates.
 - Top performer sections exclude Low Data and Pause Candidate creatives.
-- Needs Optimization and Pause Candidates must be discussed separately.
 - Engagement and Message results must be analyzed separately.
 - Engagement CPR and Message CPR are not the same business metric and must not be compared as equivalent.
 - Do not calculate or discuss Avg CPR across all result categories.
 - Use only Avg Cost / Engagement and Avg Cost / Message.
 - Creative concentration must distinguish share of all results from share inside the result category.
 - If top creative share is high, explicitly mention single creative dependency risk and recommend testing additional creative variations.
-- Strong Performer section should explain why each strong creative is efficient, whether cautious scaling is reasonable, and whether fatigue risk exists.
-- Good / Stable Performer section should explain why these creatives should be maintained or tested further.
-- Needs Optimization section should explain whether the issue is high CPR, limited result volume, or inefficient spend.
-- Pause Candidates section should explain why replacement or budget reduction is reasonable.
 - If ROAS is null, write exactly:
   "ROAS is not calculated because purchase data is not available."
 
@@ -636,9 +642,13 @@ Required output structure:
                     "content": (
                         "You are a senior paid media analyst. "
                         "Use only provided data. All currency is USD. "
+                        "performance_label is ground truth and must never be contradicted. "
+                        "Never call Good Performer creatives Strong Performer. "
+                        "Never call Needs Optimization creatives Good Performer. "
+                        "Never call Low Data creatives weak, strong, good, bad, or pause candidates. "
+                        "Never call creatives or report cards campaigns. "
                         "Do not mention delivery status. "
                         "Do not invent targeting, formats, placements, percentages, or labels. "
-                        "Never call creatives or report cards campaigns. "
                         "Do not infer audience effectiveness from audience distribution. "
                         "Do not recommend targeting changes based on age or gender distribution. "
                         "Do not discuss audience demographics outside the Audience Distribution section. "
@@ -648,7 +658,7 @@ Required output structure:
                 },
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.03
+            temperature=0.01
         )
         return res.choices[0].message.content
     except Exception as e:
