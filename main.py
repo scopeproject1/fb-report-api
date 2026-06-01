@@ -21,7 +21,7 @@ LOW_DATA_MIN_SPEND = 1.0
 
 @app.get("/")
 def root():
-    return {"status": "running", "version": "media-buying-engine-v7-final-logic"}
+    return {"status": "running", "version": "media-buying-engine-v8-final-report-polish"}
 
 
 def money(v):
@@ -43,6 +43,24 @@ def num(v):
         return f"{int(float(v)):,}"
     except Exception:
         return "0"
+
+
+def pct(v):
+    if v is None:
+        return "-"
+    try:
+        return f"{float(v):.1f}%"
+    except Exception:
+        return "-"
+
+
+def roas_value(v):
+    if v is None:
+        return "-"
+    try:
+        return f"{float(v):.2f}"
+    except Exception:
+        return "-"
 
 
 def clean_text(v):
@@ -75,6 +93,10 @@ def safe_sum(df, col):
     if col not in df.columns:
         return 0
     return pd.to_numeric(df[col], errors="coerce").fillna(0).sum()
+
+
+def safe_share(part, total):
+    return round((part / total) * 100, 1) if total else 0
 
 
 def dominant_text(values):
@@ -141,14 +163,13 @@ def sum_by_column(rows, group_col, value_col="Results"):
 
 def add_share_to_breakdown(items):
     total = sum(item["value"] for item in items)
-
     output = []
+
     for item in items:
-        share = round((item["value"] / total) * 100, 1) if total else 0
         output.append({
             "name": item["name"],
             "value": item["value"],
-            "share": share
+            "share": safe_share(item["value"], total)
         })
 
     return output
@@ -172,16 +193,8 @@ def segment_summary(rows, group_col):
     worst = data[-1]
 
     return {
-        "best": {
-            "name": best["name"],
-            "value": best["value"],
-            "share": best["share"]
-        },
-        "worst": {
-            "name": worst["name"],
-            "value": worst["value"],
-            "share": worst["share"]
-        },
+        "best": {"name": best["name"], "value": best["value"], "share": best["share"]},
+        "worst": {"name": worst["name"], "value": worst["value"], "share": worst["share"]},
         "breakdown": data[:5]
     }
 
@@ -201,22 +214,22 @@ def classify_creative(category, results, spent, cpr, cpm, frequency):
         if results >= 1000 and cpr is not None and cpr <= 0.02:
             return "Strong Performer", "Efficient", "Increase budget cautiously", fatigue_risk
         if cpr is not None and cpr <= 0.05:
-            return "Good Performer", "Efficient", "Keep active and test variations", fatigue_risk
+            return "Good Performer", "Efficient", "Maintain budget and test variations", fatigue_risk
         if cpr is not None and cpr <= 0.10:
             return "Needs Optimization", "Moderate", "Keep limited budget and improve creative", fatigue_risk
         if spent >= 8 and cpr is not None and cpr > 0.10:
-            return "Pause Candidate", "Inefficient", "Reduce or pause budget", fatigue_risk
+            return "Pause Candidate", "Inefficient", "Reduce budget or replace creative", fatigue_risk
         return "Needs Optimization", "Moderate", "Keep limited budget and improve creative", fatigue_risk
 
     if category == "MESSAGES":
         if results >= 10 and cpr is not None and cpr <= 0.40:
             return "Strong Performer", "Efficient", "Increase budget cautiously", fatigue_risk
         if results >= 4 and cpr is not None and cpr <= 0.60:
-            return "Good Performer", "Balanced", "Keep stable and test variations", fatigue_risk
+            return "Good Performer", "Balanced", "Maintain budget and test variations", fatigue_risk
         if results >= 3 and cpr is not None and cpr <= 0.90:
             return "Needs Optimization", "Expensive / Weak", "Reduce budget or improve creative", fatigue_risk
         if spent >= 3 and results >= 3 and cpr is not None and cpr > 0.90:
-            return "Pause Candidate", "Inefficient", "Reduce or pause budget", fatigue_risk
+            return "Pause Candidate", "Inefficient", "Reduce budget or replace creative", fatigue_risk
         if spent >= 1 and results < 3:
             return "Low Data", "Insufficient Data", "Collect more data before decision", fatigue_risk
         return "Low Data", "Insufficient Data", "Collect more data before decision", fatigue_risk
@@ -244,7 +257,7 @@ def build_creatives(df):
 
         spent = safe_sum(sub, "Amount spent (USD)")
         results = safe_sum(sub, "Results")
-        reach = safe_sum(sub, "Reach")
+        summed_reach = safe_sum(sub, "Reach")
         impressions = safe_sum(sub, "Impressions")
         purchases = safe_sum(sub, "Purchases")
         messaging = safe_sum(sub, "Messaging conversations started")
@@ -252,11 +265,10 @@ def build_creatives(df):
 
         cpr = round(spent / results, 4) if results else None
         cpm = round((spent / impressions) * 1000, 2) if impressions else None
-        frequency = round(impressions / reach, 2) if reach else None
-        roas = round(purchase_value / spent, 2) if purchase_value and spent else None
+        frequency = round(impressions / summed_reach, 2) if summed_reach else None
+        roas = round(purchase_value / spent, 2) if purchases and purchase_value and spent else None
 
         objective = dominant_text(sub["Objective"]) if "Objective" in sub.columns else ""
-        delivery_status = dominant_text(sub["Delivery status"]) if "Delivery status" in sub.columns else ""
 
         age_info = segment_summary(rows, "Age")
         gender_info = segment_summary(rows, "Gender")
@@ -273,10 +285,10 @@ def build_creatives(df):
             "result_category": category,
             "result_type": display_result_type(category),
             "objective": objective,
-            "delivery_status": delivery_status,
 
             "results": int(results),
-            "reach": int(reach),
+            "summed_reach": int(summed_reach),
+            "reach": int(summed_reach),
             "impressions": int(impressions),
             "spent": round(float(spent), 2),
 
@@ -314,18 +326,19 @@ def build_creatives(df):
 def summarize_category(items):
     total_spent = round(sum(c["spent"] for c in items), 2)
     total_results = sum(c["results"] for c in items)
-    total_reach = sum(c["reach"] for c in items)
+    total_summed_reach = sum(c["summed_reach"] for c in items)
     total_impressions = sum(c["impressions"] for c in items)
 
     return {
         "count": len(items),
         "spent_usd": total_spent,
         "results": total_results,
-        "reach": total_reach,
+        "summed_reach": total_summed_reach,
+        "reach": total_summed_reach,
         "impressions": total_impressions,
         "avg_cpr_usd": round(total_spent / total_results, 4) if total_results else None,
         "avg_cpm_usd": round((total_spent / total_impressions) * 1000, 2) if total_impressions else None,
-        "frequency": round(total_impressions / total_reach, 2) if total_reach else None,
+        "frequency": round(total_impressions / total_summed_reach, 2) if total_summed_reach else None,
     }
 
 
@@ -352,26 +365,25 @@ def category_items(creatives, category):
 
 
 def top_items(items, limit=10):
-    items = [
+    eligible = [
         c for c in items
         if c["performance_label"] not in ["Low Data", "Pause Candidate"]
     ]
 
     label_rank = {
-        "Strong Performer": 5,
-        "Good Performer": 4,
+        "Strong Performer": 1,
+        "Good Performer": 2,
         "Needs Optimization": 3,
     }
 
     return sorted(
-        items,
+        eligible,
         key=lambda x: (
-            label_rank.get(x["performance_label"], 0),
-            x["results"],
-            -(x["cpr"] if x["cpr"] is not None else 999),
-            -x["spent"]
-        ),
-        reverse=True
+            label_rank.get(x["performance_label"], 99),
+            -x["results"],
+            x["cpr"] if x["cpr"] is not None else float("inf"),
+            -x["spent"],
+        )
     )[:limit]
 
 
@@ -379,7 +391,6 @@ def weak_items(items, limit=10):
     filtered = [
         c for c in items
         if c["performance_label"] in ["Pause Candidate", "Needs Optimization"]
-        and c["spent"] >= 1
     ]
 
     label_rank = {
@@ -390,9 +401,9 @@ def weak_items(items, limit=10):
     return sorted(
         filtered,
         key=lambda x: (
-            label_rank.get(x["performance_label"], 9),
-            -(x["cpr"] or 0),
-            -x["spent"]
+            label_rank.get(x["performance_label"], 99),
+            -(x["cpr"] if x["cpr"] is not None else 0),
+            -x["spent"],
         )
     )[:limit]
 
@@ -438,47 +449,61 @@ def label_counts(creatives):
     return counts
 
 
-def creative_concentration(creatives, total_results):
+def creative_concentration(creatives, total_results, category_totals):
     if not creatives or not total_results:
         return None
 
     top = max(creatives, key=lambda c: c["results"])
-    share = round((top["results"] / total_results) * 100, 1)
+    category_results = category_totals.get(top["result_category"], {}).get("results", 0)
 
     return {
         "top_creative": top["ad_name"],
+        "top_creative_name": top["ad_name"],
         "result_category": top["result_category"],
         "results": top["results"],
-        "share_of_total_results": share,
-        "is_highly_concentrated": share >= 50
+        "all_results": total_results,
+        "category_results": category_results,
+        "share_of_total_results": safe_share(top["results"], total_results),
+        "share_of_category_results": safe_share(top["results"], category_results),
+        "is_highly_concentrated": safe_share(top["results"], total_results) >= 50
     }
 
 
 def ai_analysis(payload):
     prompt = f"""
-შენ ხარ senior Meta Ads analyst და media buyer.
+You are a senior Meta Ads analyst and media buyer.
 
-შენი ამოცანაა ზუსტი, მოკლე და პრაქტიკული ანალიზი.
+Write a concise, professional Georgian-language report based only on the JSON payload.
+Keep the visible report natural and client-ready.
 
-ძირითადი წესები:
-- ყველა თანხა არის USD-ში.
-- არ ახსენო ლარი.
-- არ ახსენო delivery_status.
-- არ გამოიყენო სიტყვები active, inactive, paused.
-- არ გამოიგონო placement, format, targeting ან პროცენტი, თუ payload-ში არ არის.
-- creative-ს performance_label არის საბოლოო status. არ გადაარქვა.
-- Low Data creative არ შეაფასო როგორც სუსტი ან ძლიერი.
-- Pause Candidate და Needs Optimization ცალ-ცალკე გააანალიზე.
-- Audience section-ში არ გააკეთო population-level conclusion.
-- გამოიყენე wording: "ამ მონაცემებში", "ამ creatives-ში", "მოცემულ შედეგებში".
-- მთავარი აქცენტი: სწორი დაჯგუფება, CPR, result volume, spend efficiency, concentration risk და next action.
+Important rules:
+- All currency is USD. Never write GEL or "ლარი".
+- Use "Summed Reach" or "Reach from breakdown rows"; do not present reach as guaranteed unique reach.
+- Do not mention delivery status or use the words active, inactive, paused.
+- Do not invent targeting, placements, formats, or percentages.
+- Do not make behavioral audience claims such as men/women being more active or targeting should focus on a gender.
+- Audience wording must describe result distribution only. Use phrasing like:
+  "ამ მონაცემებში male სეგმენტზე მოდის შედეგების ყველაზე დიდი წილი."
+  "მოცემულ creatives-ში female სეგმენტი ჩანს best gender-ად."
+  "This is result distribution, not confirmed targeting performance."
+- Low Data creatives must appear only in the Low Data Creatives section and must not be called weak, strong, underperforming, or a pause recommendation.
+- Top performer sections exclude Low Data and Pause Candidate creatives.
+- Needs Optimization and Pause Candidates must be discussed separately.
+- Engagement and message shares must be stated separately:
+  "Engagement represents X% of all results."
+  "Messages represent Y% of all results."
+- Creative concentration must distinguish share of all results from share inside the result category.
+  If the top creative has 4,197 results, all results are 4,607, and engagement results are 4,512, write:
+  "4,197 / 4,607 = 91.1% of all results" and
+  "4,197 / 4,512 = 93.0% of engagement results."
+  Do not say 91.1% of the engagement category.
+- If ROAS is null, write exactly:
+  "ROAS is not calculated because purchase data is not available."
 
-მონაცემები:
+JSON payload:
 {json.dumps(payload, ensure_ascii=False, indent=2)}
 
-დაწერე ქართულად.
-
-სტრუქტურა:
+Required output structure:
 1. Executive Summary
 2. KPI Summary
 3. Result Category Analysis
@@ -505,7 +530,8 @@ def ai_analysis(payload):
                         "You are a senior paid media analyst. "
                         "Use only provided data. All currency is USD. "
                         "Do not mention delivery status. "
-                        "Do not invent targeting, formats, placements, percentages, or labels."
+                        "Do not invent targeting, formats, placements, percentages, or labels. "
+                        "Write naturally and concisely in Georgian."
                     )
                 },
                 {"role": "user", "content": prompt}
@@ -563,7 +589,7 @@ async def process_report(
     }
 
     total_spent = round(safe_sum(df, "Amount spent (USD)"), 2)
-    total_reach = int(safe_sum(df, "Reach"))
+    total_summed_reach = int(safe_sum(df, "Reach"))
     total_impressions = int(safe_sum(df, "Impressions"))
     total_results = int(safe_sum(df, "Results"))
     total_purchases = int(safe_sum(df, "Purchases"))
@@ -572,8 +598,11 @@ async def process_report(
 
     avg_cpr = round(total_spent / total_results, 4) if total_results else None
     avg_cpm = round((total_spent / total_impressions) * 1000, 2) if total_impressions else None
-    avg_frequency = round(total_impressions / total_reach, 2) if total_reach else None
-    total_roas = round(total_purchase_value / total_spent, 2) if total_purchase_value and total_spent else None
+    avg_frequency = round(total_impressions / total_summed_reach, 2) if total_summed_reach else None
+    total_roas = round(total_purchase_value / total_spent, 2) if total_purchases and total_purchase_value and total_spent else None
+
+    engagement_share_of_all_results = safe_share(category_totals["ENGAGEMENT"]["results"], total_results)
+    message_share_of_all_results = safe_share(category_totals["MESSAGES"]["results"], total_results)
 
     weak_creatives = weak_items(creatives, 10)
     low_data_creatives = low_data_items(creatives, 10)
@@ -588,13 +617,18 @@ async def process_report(
         if c["performance_label"] == "Good Performer"
     ]
 
+    needs_optimization = [
+        c for c in creatives
+        if c["performance_label"] == "Needs Optimization"
+    ]
+
     pause_candidates = [
         c for c in creatives
         if c["performance_label"] == "Pause Candidate"
     ]
 
     category_breakdown = result_category_breakdown(creatives)
-    concentration = creative_concentration(creatives, total_results)
+    concentration = creative_concentration(creatives, total_results, category_totals)
 
     payload = {
         "brand": brand,
@@ -602,11 +636,14 @@ async def process_report(
         "currency": "USD",
         "totals": {
             "spent_usd": total_spent,
-            "reach": total_reach,
+            "summed_reach": total_summed_reach,
+            "reach_from_breakdown_rows": total_summed_reach,
             "impressions": total_impressions,
             "all_results": total_results,
             "engagement_results": category_totals["ENGAGEMENT"]["results"],
             "message_results": category_totals["MESSAGES"]["results"],
+            "engagement_share_of_all_results": engagement_share_of_all_results,
+            "message_share_of_all_results": message_share_of_all_results,
             "purchases": total_purchases,
             "messaging_conversations": total_messaging,
             "purchase_value_usd": total_purchase_value,
@@ -616,6 +653,7 @@ async def process_report(
             "avg_cpm_usd": avg_cpm,
             "avg_frequency": avg_frequency,
             "roas": total_roas,
+            "roas_note": "ROAS is not calculated because purchase data is not available." if total_roas is None else "",
             "raw_rows": len(df),
             "creative_count": len(creatives),
         },
@@ -628,6 +666,7 @@ async def process_report(
         "top_purchase_creatives": purchase_creatives,
         "strong_creatives": strong_creatives[:10],
         "good_creatives": good_creatives[:10],
+        "needs_optimization": needs_optimization[:10],
         "weak_creatives": weak_creatives,
         "pause_candidates": pause_candidates[:10],
         "low_data_creatives": low_data_creatives,
@@ -646,11 +685,14 @@ async def process_report(
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
         totals={
             "spent": total_spent,
-            "reach": total_reach,
+            "summed_reach": total_summed_reach,
+            "reach": total_summed_reach,
             "impressions": total_impressions,
             "results": total_results,
             "engagement_results": category_totals["ENGAGEMENT"]["results"],
             "message_results": category_totals["MESSAGES"]["results"],
+            "engagement_share_of_all_results": engagement_share_of_all_results,
+            "message_share_of_all_results": message_share_of_all_results,
             "avg_cost_per_engagement": category_totals["ENGAGEMENT"]["avg_cpr_usd"],
             "avg_cost_per_message": category_totals["MESSAGES"]["avg_cpr_usd"],
             "engagement_spend": category_totals["ENGAGEMENT"]["spent_usd"],
@@ -679,6 +721,8 @@ async def process_report(
         ai_text=ai_text,
         money=money,
         num=num,
+        pct=pct,
+        roas_value=roas_value,
     )
 
     html_path = tempfile.NamedTemporaryFile(delete=False, suffix=".html").name

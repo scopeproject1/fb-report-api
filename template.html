@@ -175,10 +175,11 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 
 .simple-row {
   display: grid;
-  grid-template-columns: 1fr 100px;
+  grid-template-columns: 1fr 90px 70px;
   border-bottom: 1px solid #e5e7eb;
   padding: 9px 0;
   font-size: 12px;
+  gap: 8px;
 }
 
 .badge {
@@ -232,8 +233,8 @@ h3 { font-size: 17px; margin: 0 0 10px; }
     </div>
 
     <div class="kpi">
-      <div class="label">Reach</div>
-      <div class="value">{{ num(totals.reach) }}</div>
+      <div class="label">Summed Reach</div>
+      <div class="value">{{ num(totals.summed_reach) }}</div>
     </div>
 
     <div class="kpi">
@@ -297,17 +298,28 @@ h3 { font-size: 17px; margin: 0 0 10px; }
     </div>
 
     <div class="kpi">
+      <div class="label">Top Creative Share</div>
+      <div class="value">{{ pct(totals.top_creative_share) }}</div>
+    </div>
+
+    <div class="kpi">
+      <div class="label">Top Creative Name</div>
+      <div class="value" style="font-size:18px; line-height:1.25;">{{ totals.top_creative_name or "-" }}</div>
+    </div>
+
+    <div class="kpi">
       <div class="label">Purchases</div>
       <div class="value">{{ num(totals.purchases) }}</div>
     </div>
 
     <div class="kpi">
       <div class="label">ROAS</div>
-      <div class="value">{{ totals.roas or "-" }}</div>
+      <div class="value">{{ roas_value(totals.roas) }}</div>
     </div>
   </div>
 
   <p class="note">
+    Summed Reach is calculated from breakdown rows and is not guaranteed to represent unique reach.
     Engagement and messaging campaigns are analyzed separately because they represent different campaign objectives and optimization logic.
   </p>
 </section>
@@ -377,7 +389,7 @@ h3 { font-size: 17px; margin: 0 0 10px; }
         </div>
 
         <div class="metric">
-          <div class="label">Reach</div>
+          <div class="label">Summed Reach</div>
           <div class="value">{{ num(c.reach) }}</div>
         </div>
 
@@ -473,7 +485,7 @@ h3 { font-size: 17px; margin: 0 0 10px; }
         </div>
 
         <div class="metric">
-          <div class="label">Reach</div>
+          <div class="label">Summed Reach</div>
           <div class="value">{{ num(c.reach) }}</div>
         </div>
 
@@ -574,7 +586,7 @@ h3 { font-size: 17px; margin: 0 0 10px; }
         </div>
 
         <div class="metric">
-          <div class="label">Reach</div>
+          <div class="label">Summed Reach</div>
           <div class="value">{{ num(c.reach) }}</div>
         </div>
 
@@ -668,10 +680,17 @@ h3 { font-size: 17px; margin: 0 0 10px; }
     <div>
       <h3>Age Breakdown</h3>
 
+      <div class="simple-row" style="font-weight:700;">
+        <div>Age</div>
+        <div>Count</div>
+        <div>Share</div>
+      </div>
+
       {% for item in age_breakdown %}
       <div class="simple-row">
         <div>{{ item.name }}</div>
         <div>{{ num(item.value) }}</div>
+        <div>{{ pct(item.share) }}</div>
       </div>
       {% endfor %}
     </div>
@@ -679,10 +698,17 @@ h3 { font-size: 17px; margin: 0 0 10px; }
     <div>
       <h3>Gender Breakdown</h3>
 
+      <div class="simple-row" style="font-weight:700;">
+        <div>Gender</div>
+        <div>Count</div>
+        <div>Share</div>
+      </div>
+
       {% for item in gender_breakdown %}
       <div class="simple-row">
         <div>{{ item.name }}</div>
         <div>{{ num(item.value) }}</div>
+        <div>{{ pct(item.share) }}</div>
       </div>
       {% endfor %}
     </div>
