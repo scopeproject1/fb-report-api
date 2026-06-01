@@ -545,7 +545,6 @@ def creative_concentration(creatives, total_results, category_totals):
 
 
 def ai_analysis(payload):
-def ai_analysis(payload):
     prompt = f"""
 You are a senior Meta Ads analyst and media buyer.
 
