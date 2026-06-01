@@ -21,15 +21,17 @@ LOW_DATA_MIN_SPEND = 1.0
 
 @app.get("/")
 def root():
-    return {"status": "running", "version": "media-buying-engine-v8-final-report-polish"}
+    return {
+        "status": "running",
+        "version": "media-buying-engine-v10-enterprise-production"
+    }
 
 
 def money(v):
     if v is None:
         return "-"
     try:
-        value = float(v)
-        return f"${value:,.2f}"
+        return f"${float(v):,.2f}"
     except Exception:
         return "$0.00"
 
@@ -160,26 +162,25 @@ def sum_by_column(rows, group_col, value_col="Results"):
         key = clean_text(row.get(group_col, ""))
         if not key:
             continue
-
         value = row.get(value_col, 0) or 0
         result[key] = result.get(key, 0) + float(value)
 
-    sorted_items = sorted(result.items(), key=lambda x: x[1], reverse=True)
-    return [{"name": str(k), "value": int(v)} for k, v in sorted_items]
+    return [
+        {"name": str(k), "value": int(v)}
+        for k, v in sorted(result.items(), key=lambda x: x[1], reverse=True)
+    ]
 
 
 def add_share_to_breakdown(items):
     total = sum(item["value"] for item in items)
-    output = []
-
-    for item in items:
-        output.append({
+    return [
+        {
             "name": item["name"],
             "value": item["value"],
             "share": safe_share(item["value"], total)
-        })
-
-    return output
+        }
+        for item in items
+    ]
 
 
 def segment_summary(rows, group_col):
@@ -200,10 +201,32 @@ def segment_summary(rows, group_col):
     worst = data[-1]
 
     return {
-        "best": {"name": best["name"], "value": best["value"], "share": best["share"]},
-        "worst": {"name": worst["name"], "value": worst["value"], "share": worst["share"]},
+        "best": best,
+        "worst": worst,
         "breakdown": data[:5]
     }
+
+
+def engagement_score(results, spent, cpr):
+    if not results or not cpr:
+        return 0
+
+    volume_component = results * 0.7
+    efficiency_component = (1 / cpr) * 8
+    spend_confidence = min(spent / 5, 1)
+
+    return round((volume_component + efficiency_component) * spend_confidence, 2)
+
+
+def message_score(results, spent, cpr):
+    if not results or not cpr:
+        return 0
+
+    volume_component = results * 8
+    efficiency_component = (1 / cpr) * 4
+    spend_confidence = min(spent / 3, 1)
+
+    return round((volume_component + efficiency_component) * spend_confidence, 2)
 
 
 def classify_creative(category, results, spent, cpr, cpm, frequency):
@@ -218,30 +241,42 @@ def classify_creative(category, results, spent, cpr, cpm, frequency):
         return "Low Data", "Insufficient Data", "Collect more data before decision", fatigue_risk
 
     if category == "ENGAGEMENT":
-        if results >= 1000 and cpr is not None and cpr <= 0.02:
+        score = engagement_score(results, spent, cpr)
+
+        if results >= 1000 and cpr is not None and cpr <= 0.02 and spent >= 3:
             return "Strong Performer", "Efficient", "Increase budget cautiously", fatigue_risk
-        if cpr is not None and (
-            (results >= 150 and cpr <= 0.07)
-            or (results >= 50 and cpr <= 0.05)
+
+        if score >= 250 or (
+            cpr is not None and (
+                (results >= 150 and cpr <= 0.07)
+                or (results >= 50 and cpr <= 0.05)
+            )
         ):
             return "Good Performer", "Efficient", "Maintain budget and test variations", fatigue_risk
+
         if cpr is not None and cpr <= 0.10:
             return "Needs Optimization", "Moderate", "Keep limited budget and improve creative", fatigue_risk
+
         if spent >= 8 and cpr is not None and cpr > 0.10:
             return "Pause Candidate", "Inefficient", "Reduce budget or replace creative", fatigue_risk
+
         return "Needs Optimization", "Moderate", "Keep limited budget and improve creative", fatigue_risk
 
     if category == "MESSAGES":
-        if results >= 15 and cpr is not None and cpr <= 0.40:
+        score = message_score(results, spent, cpr)
+
+        if results >= 15 and cpr is not None and cpr <= 0.40 and spent >= 3:
             return "Strong Performer", "Efficient", "Increase budget cautiously", fatigue_risk
-        if results >= 4 and cpr is not None and cpr <= 0.60:
+
+        if score >= 45 or (results >= 4 and cpr is not None and cpr <= 0.60):
             return "Good Performer", "Balanced", "Maintain budget and test variations", fatigue_risk
+
         if results >= 3 and cpr is not None and cpr <= 0.90:
             return "Needs Optimization", "Expensive", "Reduce budget or improve creative", fatigue_risk
+
         if spent >= 3 and results >= 3 and cpr is not None and cpr > 0.90:
             return "Pause Candidate", "Inefficient", "Reduce budget or replace creative", fatigue_risk
-        if spent >= 1 and results < 3:
-            return "Low Data", "Insufficient Data", "Collect more data before decision", fatigue_risk
+
         return "Low Data", "Insufficient Data", "Collect more data before decision", fatigue_risk
 
     if results >= 5 and cpr is not None:
@@ -275,7 +310,7 @@ def build_creatives(df):
 
         cpr = round(spent / results, 4) if results else None
         cpm = round((spent / impressions) * 1000, 2) if impressions else None
-        frequency = round(impressions / summed_reach, 2) if summed_reach else None
+        estimated_frequency = round(impressions / summed_reach, 2) if summed_reach else None
         roas = round(purchase_value / spent, 2) if purchases and purchase_value and spent else None
 
         objective = dominant_text(sub["Objective"]) if "Objective" in sub.columns else ""
@@ -284,7 +319,7 @@ def build_creatives(df):
         gender_info = segment_summary(rows, "Gender")
 
         label, efficiency, recommendation, fatigue_risk = classify_creative(
-            category, results, spent, cpr, cpm, frequency
+            category, results, spent, cpr, cpm, estimated_frequency
         )
 
         creatives.append({
@@ -304,7 +339,8 @@ def build_creatives(df):
 
             "cpr": cpr,
             "cpm": cpm,
-            "frequency": frequency,
+            "frequency": estimated_frequency,
+            "estimated_frequency": estimated_frequency,
 
             "purchases": int(purchases),
             "messaging": int(messaging),
@@ -345,11 +381,10 @@ def summarize_category(items):
         "spent_usd": total_spent,
         "results": total_results,
         "summed_reach": total_summed_reach,
-        "reach": total_summed_reach,
         "impressions": total_impressions,
         "avg_cpr_usd": round(total_spent / total_results, 4) if total_results else None,
         "avg_cpm_usd": round((total_spent / total_impressions) * 1000, 2) if total_impressions else None,
-        "frequency": round(total_impressions / total_summed_reach, 2) if total_summed_reach else None,
+        "estimated_frequency": round(total_impressions / total_summed_reach, 2) if total_summed_reach else None,
     }
 
 
@@ -426,16 +461,36 @@ def low_data_items(items, limit=10):
     )[:limit]
 
 
-def without_audience_fields(creative):
-    excluded = {
-        "best_age",
-        "worst_age",
-        "age_breakdown",
-        "best_gender",
-        "worst_gender",
-        "gender_breakdown",
+def ai_safe_creative(creative):
+    allowed = {
+        "ad_name",
+        "campaign_name",
+        "page_name",
+        "result_category",
+        "result_type",
+        "objective",
+        "results",
+        "summed_reach",
+        "impressions",
+        "spent",
+        "cpr",
+        "cpm",
+        "estimated_frequency",
+        "purchases",
+        "messaging",
+        "purchase_value",
+        "roas",
+        "performance_label",
+        "efficiency_tier",
+        "budget_recommendation",
+        "fatigue_risk",
+        "raw_rows",
     }
-    return {k: v for k, v in creative.items() if k not in excluded}
+    return {k: v for k, v in creative.items() if k in allowed}
+
+
+def ai_safe_creatives(creatives):
+    return [ai_safe_creative(c) for c in creatives]
 
 
 def result_category_breakdown(creatives):
@@ -478,6 +533,14 @@ def creative_concentration(creatives, total_results, category_totals):
 
     top = max(creatives, key=lambda c: c["results"])
     category_results = category_totals.get(top["result_category"], {}).get("results", 0)
+    total_share = safe_share(top["results"], total_results)
+
+    if total_share >= 80:
+        risk = "High"
+    elif total_share >= 50:
+        risk = "Medium"
+    else:
+        risk = "Low"
 
     return {
         "top_creative": top["ad_name"],
@@ -486,9 +549,10 @@ def creative_concentration(creatives, total_results, category_totals):
         "results": top["results"],
         "all_results": total_results,
         "category_results": category_results,
-        "share_of_total_results": safe_share(top["results"], total_results),
+        "share_of_total_results": total_share,
         "share_of_category_results": safe_share(top["results"], category_results),
-        "is_highly_concentrated": safe_share(top["results"], total_results) >= 50
+        "concentration_risk": risk,
+        "is_highly_concentrated": total_share >= 50
     }
 
 
@@ -502,38 +566,24 @@ Keep the visible report natural and client-ready.
 Important rules:
 - All currency is USD. Never write GEL or "ლარი".
 - Use "Summed Reach" or "Reach from breakdown rows"; do not present reach as guaranteed unique reach.
+- Use "Estimated Frequency"; it is calculated from summed breakdown rows.
 - Do not mention delivery status or use the words active, inactive, paused.
 - Do not invent targeting, placements, formats, or percentages.
-- Never call report cards or creatives "campaigns". If using category counts, write "creatives" or "report cards".
-- The category_totals creative_count/report_card_count fields are not campaign counts.
+- Never call report cards or creatives "campaigns".
 - Do not make behavioral audience claims such as men/women being more active or targeting should focus on a gender.
-- Do not turn audience distribution into audience effectiveness. Never write that a gender/age segment has better results, performs better, or deserves more attention because of distribution share.
-- Correct wording: "Messages შედეგების განაწილებაში female სეგმენტზე მოდის 55.8%. ეს არ წარმოადგენს აუდიტორიის ეფექტურობის დადასტურებას."
+- Do not infer audience effectiveness from audience distribution.
 - Budget Actions and Next Month Action Plan must not recommend budget shifts based on gender/age distribution alone.
-- Audience wording must describe result distribution only. Use phrasing like:
-  "ამ მონაცემებში male სეგმენტზე მოდის შედეგების ყველაზე დიდი წილი."
-  "მოცემულ creatives-ში female სეგმენტი ჩანს best gender-ად."
-  "This is result distribution, not confirmed targeting performance."
-- Do not generalize a single creative's best_age/best_gender or creative-level audience share to the whole result category.
-- Do not write category-level gender or age percentages for Engagement or Messages. Mention only overall audience distribution from top-level age_breakdown/gender_breakdown, or qualitative creative-level observations without percentages.
-- For Message Analysis, do not write "female/male represents X% of Message results". If needed, write only that "ზოგიერთ message creative-ში female/male სეგმენტი best gender-ად ჩანს" and add that this is not audience effectiveness.
-- Do not write audience percentages for Low Data creatives. Low Data audience observations must stay qualitative or be omitted.
-- Low Data creatives must appear only in the Low Data Creatives section and must not be called weak, strong, underperforming, or a pause recommendation.
+- Audience wording must describe result distribution only.
+- Do not write category-level gender or age percentages for Engagement or Messages.
+- Do not write audience percentages for Low Data creatives.
+- Low Data creatives must appear only in the Low Data Creatives section.
 - Top performer sections exclude Low Data and Pause Candidate creatives.
 - Needs Optimization and Pause Candidates must be discussed separately.
-- Engagement and message shares must be stated separately:
-  "Engagement represents X% of all results."
-  "Messages represent Y% of all results."
+- Engagement and message shares must be stated separately.
 - Creative concentration must distinguish share of all results from share inside the result category.
-  If the top creative has 4,197 results, all results are 4,607, and engagement results are 4,512, write:
-  "4,197 / 4,607 = 91.1% of all results" and
-  "4,197 / 4,512 = 93.0% of engagement results."
-  Do not say 91.1% of the engagement category.
-- If top creative share is very high, explicitly mention single creative dependency risk:
-  "Results are heavily dependent on a single creative. Testing additional variations is recommended to reduce concentration risk."
-- Do not compare Engagement CPR and Message CPR as if they were the same business metric. Discuss weak/optimization creatives within their own result category.
-- In Needs Optimization and Pause Candidates sections, group creatives by result category before discussing CPR or spend.
-- Do not calculate or discuss Avg CPR across all results. Use only Avg Cost / Engagement and Avg Cost / Message.
+- If top creative share is high, explicitly mention single creative dependency risk.
+- Do not compare Engagement CPR and Message CPR as if they were the same business metric.
+- Do not calculate or discuss Avg CPR across all results.
 - If ROAS is null, write exactly:
   "ROAS is not calculated because purchase data is not available."
 
@@ -569,7 +619,6 @@ Required output structure:
                         "Do not mention delivery status. "
                         "Do not invent targeting, formats, placements, percentages, or labels. "
                         "Never call creatives or report cards campaigns. "
-                        "Do not use Low Data audience percentages. "
                         "Do not infer audience effectiveness from audience distribution. "
                         "Do not discuss average CPR across all result categories. "
                         "Write naturally and concisely in Georgian."
@@ -638,7 +687,7 @@ async def process_report(
     total_purchase_value = round(safe_sum(df, "Purchases conversion value"), 2)
 
     avg_cpm = round((total_spent / total_impressions) * 1000, 2) if total_impressions else None
-    avg_frequency = round(total_impressions / total_summed_reach, 2) if total_summed_reach else None
+    estimated_frequency = round(total_impressions / total_summed_reach, 2) if total_summed_reach else None
     total_roas = round(total_purchase_value / total_spent, 2) if total_purchases and total_purchase_value and total_spent else None
 
     engagement_share_of_all_results = safe_share(category_totals["ENGAGEMENT"]["results"], total_results)
@@ -703,7 +752,7 @@ async def process_report(
             "avg_cost_per_engagement_usd": category_totals["ENGAGEMENT"]["avg_cpr_usd"],
             "avg_cost_per_message_usd": category_totals["MESSAGES"]["avg_cpr_usd"],
             "avg_cpm_usd": avg_cpm,
-            "avg_frequency": avg_frequency,
+            "estimated_frequency": estimated_frequency,
             "roas": total_roas,
             "roas_note": "ROAS is not calculated because purchase data is not available." if total_roas is None else "",
             "raw_rows": len(df),
@@ -713,16 +762,22 @@ async def process_report(
         "label_counts": label_counts(creatives),
         "category_totals": category_totals,
         "result_category_breakdown": category_breakdown,
-        "top_engagement_creatives": engagement_creatives,
-        "top_message_creatives": message_creatives,
-        "top_purchase_creatives": purchase_creatives,
-        "strong_creatives": strong_creatives[:10],
-        "good_creatives": good_creatives[:10],
-        "needs_optimization_by_category": needs_optimization_by_category,
-        "weak_engagement_creatives": weak_engagement_creatives,
-        "weak_message_creatives": weak_message_creatives,
-        "pause_candidates_by_category": pause_candidates_by_category,
-        "low_data_creatives": [without_audience_fields(c) for c in low_data_creatives],
+        "top_engagement_creatives": ai_safe_creatives(engagement_creatives),
+        "top_message_creatives": ai_safe_creatives(message_creatives),
+        "top_purchase_creatives": ai_safe_creatives(purchase_creatives),
+        "strong_creatives": ai_safe_creatives(strong_creatives[:10]),
+        "good_creatives": ai_safe_creatives(good_creatives[:10]),
+        "needs_optimization_by_category": {
+            "ENGAGEMENT": ai_safe_creatives(needs_optimization_by_category["ENGAGEMENT"]),
+            "MESSAGES": ai_safe_creatives(needs_optimization_by_category["MESSAGES"]),
+        },
+        "weak_engagement_creatives": ai_safe_creatives(weak_engagement_creatives),
+        "weak_message_creatives": ai_safe_creatives(weak_message_creatives),
+        "pause_candidates_by_category": {
+            "ENGAGEMENT": ai_safe_creatives(pause_candidates_by_category["ENGAGEMENT"]),
+            "MESSAGES": ai_safe_creatives(pause_candidates_by_category["MESSAGES"]),
+        },
+        "low_data_creatives": ai_safe_creatives(low_data_creatives),
         "age_breakdown": breakdown(df, "Age"),
         "gender_breakdown": breakdown(df, "Gender"),
     }
@@ -739,7 +794,6 @@ async def process_report(
         totals={
             "spent": total_spent,
             "summed_reach": total_summed_reach,
-            "reach": total_summed_reach,
             "impressions": total_impressions,
             "results": total_results,
             "engagement_results": category_totals["ENGAGEMENT"]["results"],
@@ -754,14 +808,14 @@ async def process_report(
             "messaging_conversations": total_messaging,
             "purchase_value": total_purchase_value,
             "avg_cpm": avg_cpm,
-            "avg_frequency": avg_frequency,
+            "estimated_frequency": estimated_frequency,
             "roas": total_roas,
             "raw_rows": len(df),
             "creative_count": len(creatives),
             "top_creative_share": concentration["share_of_total_results"] if concentration else None,
             "top_creative_name": concentration["top_creative"] if concentration else None,
+            "concentration_risk": concentration["concentration_risk"] if concentration else "-",
         },
-        creatives=creatives,
         top_engagement_creatives=engagement_creatives,
         top_message_creatives=message_creatives,
         top_purchase_creatives=purchase_creatives,
