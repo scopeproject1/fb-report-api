@@ -545,11 +545,12 @@ def creative_concentration(creatives, total_results, category_totals):
 
 
 def ai_analysis(payload):
+def ai_analysis(payload):
     prompt = f"""
 You are a senior Meta Ads analyst and media buyer.
 
 Write a concise, professional Georgian-language report based only on the JSON payload.
-Keep the visible report natural and client-ready.
+Keep the visible report natural, client-ready, and business-oriented.
 
 Important rules:
 - All currency is USD. Never write GEL or "ლარი".
@@ -560,20 +561,52 @@ Important rules:
 - Never call report cards or creatives "campaigns".
 - Do not make behavioral audience claims such as men/women being more active or targeting should focus on a gender.
 - Do not infer audience effectiveness from audience distribution.
-- Budget Actions and Next Month Action Plan must not recommend budget shifts based on gender/age distribution alone.
-- Audience wording must describe result distribution only.
-- Do not write category-level gender or age percentages for Engagement or Messages.
-- Do not write audience percentages for Low Data creatives.
+- Do not recommend targeting changes based on age or gender breakdowns.
+- Audience breakdown is descriptive only.
+- Result distribution is not evidence of audience quality or performance.
+- Audience information may only appear in the Audience Distribution section.
+- Do not discuss age or gender distributions inside Executive Summary, KPI Summary, Result Category Analysis, Creative Concentration, Engagement Analysis, Message Analysis, Strong Performers, Good / Stable Performers, Needs Optimization, Pause Candidates, Low Data Creatives, Budget Actions, or Next Month Action Plan.
+- Budget Actions and Next Month Action Plan must recommend actions only based on:
+  Cost per Result,
+  Volume of Results,
+  Spend,
+  Creative Concentration,
+  Estimated Frequency,
+  Fatigue Risk,
+  Result Category,
+  Performance Label.
 - Low Data creatives must appear only in the Low Data Creatives section.
+- Low Data creatives must not be called weak, strong, underperforming, or pause candidates.
 - Top performer sections exclude Low Data and Pause Candidate creatives.
 - Needs Optimization and Pause Candidates must be discussed separately.
-- Engagement and message shares must be stated separately.
+- Engagement and Message results must be analyzed separately.
+- Engagement CPR and Message CPR are not the same business metric and must not be compared as equivalent.
+- Do not calculate or discuss Avg CPR across all result categories.
+- Use only Avg Cost / Engagement and Avg Cost / Message.
 - Creative concentration must distinguish share of all results from share inside the result category.
-- If top creative share is high, explicitly mention single creative dependency risk.
-- Do not compare Engagement CPR and Message CPR as if they were the same business metric.
-- Do not calculate or discuss Avg CPR across all results.
+- If top creative share is high, explicitly mention single creative dependency risk and recommend testing additional creative variations.
+- Strong Performer section should explain why each strong creative is efficient, whether cautious scaling is reasonable, and whether fatigue risk exists.
+- Good / Stable Performer section should explain why these creatives should be maintained or tested further.
+- Needs Optimization section should explain whether the issue is high CPR, limited result volume, or inefficient spend.
+- Pause Candidates section should explain why replacement or budget reduction is reasonable.
 - If ROAS is null, write exactly:
   "ROAS is not calculated because purchase data is not available."
+
+Executive Summary should focus only on:
+- Spend
+- Total results
+- Efficiency
+- Engagement vs Message split
+- Creative concentration
+- Scaling opportunities
+- Optimization opportunities
+
+Audience Distribution section:
+- Only describe the top-level age_breakdown and gender_breakdown as distribution.
+- Do not say a gender or age group performs better.
+- Do not recommend budget or targeting actions based on audience distribution.
+- Use this disclaimer in Georgian:
+  "ეს არის შედეგების განაწილება და არ წარმოადგენს აუდიტორიის ეფექტურობის დადასტურებას."
 
 JSON payload:
 {json.dumps(payload, ensure_ascii=False, indent=2)}
@@ -608,6 +641,8 @@ Required output structure:
                         "Do not invent targeting, formats, placements, percentages, or labels. "
                         "Never call creatives or report cards campaigns. "
                         "Do not infer audience effectiveness from audience distribution. "
+                        "Do not recommend targeting changes based on age or gender distribution. "
+                        "Do not discuss audience demographics outside the Audience Distribution section. "
                         "Do not discuss average CPR across all result categories. "
                         "Write naturally and concisely in Georgian."
                     )
