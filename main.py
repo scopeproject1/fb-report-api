@@ -391,7 +391,17 @@ def breakdown(df, group_col, metric_col="Results", limit=10):
     )
 
     raw = [{"name": str(k), "value": int(v)} for k, v in grouped.items()]
-    return add_share_to_breakdown(raw)
+    result = add_share_to_breakdown(raw)
+
+    result = [
+        item for item in result
+        if not (
+            str(item["name"]).strip().lower() == "unknown"
+            and item["share"] < 0.1
+        )
+    ]
+
+    return result
 
 
 def category_items(creatives, category):
