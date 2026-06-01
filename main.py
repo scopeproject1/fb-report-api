@@ -21,7 +21,7 @@ LOW_DATA_MIN_SPEND = 1.0
 
 @app.get("/")
 def root():
-    return {"status": "running", "version": "media-buying-engine-v6-clean-analysis"}
+    return {"status": "running", "version": "media-buying-engine-v7-final-logic"}
 
 
 def money(v):
@@ -131,11 +131,27 @@ def sum_by_column(rows, group_col, value_col="Results"):
         key = clean_text(row.get(group_col, ""))
         if not key:
             continue
+
         value = row.get(value_col, 0) or 0
         result[key] = result.get(key, 0) + float(value)
 
     sorted_items = sorted(result.items(), key=lambda x: x[1], reverse=True)
     return [{"name": str(k), "value": int(v)} for k, v in sorted_items]
+
+
+def add_share_to_breakdown(items):
+    total = sum(item["value"] for item in items)
+
+    output = []
+    for item in items:
+        share = round((item["value"] / total) * 100, 1) if total else 0
+        output.append({
+            "name": item["name"],
+            "value": item["value"],
+            "share": share
+        })
+
+    return output
 
 
 def segment_summary(rows, group_col):
@@ -151,7 +167,7 @@ def segment_summary(rows, group_col):
             "breakdown": []
         }
 
-    total = sum(item["value"] for item in data)
+    data = add_share_to_breakdown(data)
     best = data[0]
     worst = data[-1]
 
@@ -159,12 +175,12 @@ def segment_summary(rows, group_col):
         "best": {
             "name": best["name"],
             "value": best["value"],
-            "share": round((best["value"] / total) * 100, 1) if total else 0
+            "share": best["share"]
         },
         "worst": {
             "name": worst["name"],
             "value": worst["value"],
-            "share": round((worst["value"] / total) * 100, 1) if total else 0
+            "share": worst["share"]
         },
         "breakdown": data[:5]
     }
@@ -199,8 +215,10 @@ def classify_creative(category, results, spent, cpr, cpm, frequency):
             return "Good Performer", "Balanced", "Keep stable and test variations", fatigue_risk
         if results >= 3 and cpr is not None and cpr <= 0.90:
             return "Needs Optimization", "Expensive / Weak", "Reduce budget or improve creative", fatigue_risk
-        if spent >= 1 and cpr is not None and cpr > 0.90:
+        if spent >= 3 and results >= 3 and cpr is not None and cpr > 0.90:
             return "Pause Candidate", "Inefficient", "Reduce or pause budget", fatigue_risk
+        if spent >= 1 and results < 3:
+            return "Low Data", "Insufficient Data", "Collect more data before decision", fatigue_risk
         return "Low Data", "Insufficient Data", "Collect more data before decision", fatigue_risk
 
     if results >= 5 and cpr is not None:
@@ -325,7 +343,8 @@ def breakdown(df, group_col, metric_col="Results", limit=10):
         .head(limit)
     )
 
-    return [{"name": str(k), "value": int(v)} for k, v in grouped.items()]
+    raw = [{"name": str(k), "value": int(v)} for k, v in grouped.items()]
+    return add_share_to_breakdown(raw)
 
 
 def category_items(creatives, category):
@@ -348,8 +367,8 @@ def top_items(items, limit=10):
         items,
         key=lambda x: (
             label_rank.get(x["performance_label"], 0),
-            -(x["cpr"] if x["cpr"] is not None else 999),
             x["results"],
+            -(x["cpr"] if x["cpr"] is not None else 999),
             -x["spent"]
         ),
         reverse=True
@@ -372,8 +391,8 @@ def weak_items(items, limit=10):
         filtered,
         key=lambda x: (
             label_rank.get(x["performance_label"], 9),
-            -x["spent"],
-            -(x["cpr"] or 0)
+            -(x["cpr"] or 0),
+            -x["spent"]
         )
     )[:limit]
 
@@ -419,40 +438,61 @@ def label_counts(creatives):
     return counts
 
 
+def creative_concentration(creatives, total_results):
+    if not creatives or not total_results:
+        return None
+
+    top = max(creatives, key=lambda c: c["results"])
+    share = round((top["results"] / total_results) * 100, 1)
+
+    return {
+        "top_creative": top["ad_name"],
+        "result_category": top["result_category"],
+        "results": top["results"],
+        "share_of_total_results": share,
+        "is_highly_concentrated": share >= 50
+    }
+
+
 def ai_analysis(payload):
     prompt = f"""
 შენ ხარ senior Meta Ads analyst და media buyer.
 
-შენი ამოცანაა რეპორტის ზუსტი ანალიზი:
-- სწორად გაარჩიე Engagement და Messages.
-- არ აურიო სხვადასხვა result category ერთმანეთში.
-- creative-ს status აიღე payload-იდან და არ გადაარქვა.
-- Low Data creative არ შეაფასო როგორც სუსტი ან ძლიერი.
-- Pause Candidate ცალკე ახსენე, Needs Optimization ცალკე.
-- თანხები არის USD-ში.
+შენი ამოცანაა ზუსტი, მოკლე და პრაქტიკული ანალიზი.
+
+ძირითადი წესები:
+- ყველა თანხა არის USD-ში.
 - არ ახსენო ლარი.
-- არ გამოიგონო placement, format, targeting ან პროცენტი, თუ მონაცემში არ ჩანს.
-- audience ნაწილში დაწერე როგორც შედეგების განაწილება, არა როგორც დადასტურებული targeting strategy.
-- მთავარი აქცენტი გააკეთე ზუსტ დაჯგუფებაზე, CPR-ზე, result volume-ზე, spend efficiency-ზე და next action-ზე.
+- არ ახსენო delivery_status.
+- არ გამოიყენო სიტყვები active, inactive, paused.
+- არ გამოიგონო placement, format, targeting ან პროცენტი, თუ payload-ში არ არის.
+- creative-ს performance_label არის საბოლოო status. არ გადაარქვა.
+- Low Data creative არ შეაფასო როგორც სუსტი ან ძლიერი.
+- Pause Candidate და Needs Optimization ცალ-ცალკე გააანალიზე.
+- Audience section-ში არ გააკეთო population-level conclusion.
+- გამოიყენე wording: "ამ მონაცემებში", "ამ creatives-ში", "მოცემულ შედეგებში".
+- მთავარი აქცენტი: სწორი დაჯგუფება, CPR, result volume, spend efficiency, concentration risk და next action.
 
 მონაცემები:
 {json.dumps(payload, ensure_ascii=False, indent=2)}
 
-დაწერე ქართულად, მკაფიოდ და პრაქტიკულად.
+დაწერე ქართულად.
 
 სტრუქტურა:
 1. Executive Summary
 2. KPI Summary
-3. Engagement Analysis
-4. Message Analysis
-5. Strong Performers
-6. Good / Stable Performers
-7. Needs Optimization
-8. Pause Candidates
-9. Low Data Creatives
-10. Audience Distribution
-11. Budget Actions
-12. Next Month Action Plan
+3. Result Category Analysis
+4. Creative Concentration
+5. Engagement Analysis
+6. Message Analysis
+7. Strong Performers
+8. Good / Stable Performers
+9. Needs Optimization
+10. Pause Candidates
+11. Low Data Creatives
+12. Audience Distribution
+13. Budget Actions
+14. Next Month Action Plan
 """
 
     try:
@@ -463,13 +503,14 @@ def ai_analysis(payload):
                     "role": "system",
                     "content": (
                         "You are a senior paid media analyst. "
-                        "Focus on accurate grouping, metric interpretation, and practical actions. "
-                        "Use only provided data. All currency is USD."
+                        "Use only provided data. All currency is USD. "
+                        "Do not mention delivery status. "
+                        "Do not invent targeting, formats, placements, percentages, or labels."
                     )
                 },
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.05
+            temperature=0.03
         )
         return res.choices[0].message.content
     except Exception as e:
@@ -553,6 +594,7 @@ async def process_report(
     ]
 
     category_breakdown = result_category_breakdown(creatives)
+    concentration = creative_concentration(creatives, total_results)
 
     payload = {
         "brand": brand,
@@ -577,6 +619,7 @@ async def process_report(
             "raw_rows": len(df),
             "creative_count": len(creatives),
         },
+        "creative_concentration": concentration,
         "label_counts": label_counts(creatives),
         "category_totals": category_totals,
         "result_category_breakdown": category_breakdown,
@@ -621,6 +664,8 @@ async def process_report(
             "roas": total_roas,
             "raw_rows": len(df),
             "creative_count": len(creatives),
+            "top_creative_share": concentration["share_of_total_results"] if concentration else None,
+            "top_creative_name": concentration["top_creative"] if concentration else None,
         },
         creatives=creatives,
         top_engagement_creatives=engagement_creatives,
