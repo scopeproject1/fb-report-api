@@ -298,7 +298,7 @@ h3 { font-size: 17px; margin: 0 0 10px; }
     </div>
 
     <div class="kpi">
-      <div class="label">Top Creative Share</div>
+      <div class="label">Top Creative Share (All Results)</div>
       <div class="value">{{ pct(totals.top_creative_share) }}</div>
     </div>
 
@@ -387,10 +387,10 @@ h3 { font-size: 17px; margin: 0 0 10px; }
         <div class="metric"><div class="label">CPM</div><div class="value">{{ money(c.cpm) }}</div></div>
         <div class="metric"><div class="label">Estimated Frequency</div><div class="value">{{ c.estimated_frequency or c.frequency or "-" }}</div></div>
         <div class="metric"><div class="label">Fatigue Risk</div><div class="value">{{ c.fatigue_risk }}</div></div>
-        <div class="metric"><div class="label">Best Age</div><div class="value">{{ c.best_age.name }}</div></div>
-        <div class="metric"><div class="label">Best Gender</div><div class="value">{{ c.best_gender.name }}</div></div>
-        <div class="metric"><div class="label">Lowest Age</div><div class="value">{{ c.worst_age.name }}</div></div>
-        <div class="metric"><div class="label">Lowest Gender</div><div class="value">{{ c.worst_gender.name }}</div></div>
+        <div class="metric"><div class="label">Largest Result Age Segment</div><div class="value">{{ c.best_age.name }}</div></div>
+        <div class="metric"><div class="label">Largest Result Gender Segment</div><div class="value">{{ c.best_gender.name }}</div></div>
+        <div class="metric"><div class="label">Smallest Result Age Segment</div><div class="value">{{ c.worst_age.name }}</div></div>
+        <div class="metric"><div class="label">Smallest Result Gender Segment</div><div class="value">{{ c.worst_gender.name }}</div></div>
       </div>
 
       <div class="meta">
@@ -436,10 +436,10 @@ h3 { font-size: 17px; margin: 0 0 10px; }
         <div class="metric"><div class="label">CPM</div><div class="value">{{ money(c.cpm) }}</div></div>
         <div class="metric"><div class="label">Estimated Frequency</div><div class="value">{{ c.estimated_frequency or c.frequency or "-" }}</div></div>
         <div class="metric"><div class="label">Fatigue Risk</div><div class="value">{{ c.fatigue_risk }}</div></div>
-        <div class="metric"><div class="label">Best Age</div><div class="value">{{ c.best_age.name }}</div></div>
-        <div class="metric"><div class="label">Best Gender</div><div class="value">{{ c.best_gender.name }}</div></div>
-        <div class="metric"><div class="label">Lowest Age</div><div class="value">{{ c.worst_age.name }}</div></div>
-        <div class="metric"><div class="label">Lowest Gender</div><div class="value">{{ c.worst_gender.name }}</div></div>
+        <div class="metric"><div class="label">Largest Result Age Segment</div><div class="value">{{ c.best_age.name }}</div></div>
+        <div class="metric"><div class="label">Largest Result Gender Segment</div><div class="value">{{ c.best_gender.name }}</div></div>
+        <div class="metric"><div class="label">Smallest Result Age Segment</div><div class="value">{{ c.worst_age.name }}</div></div>
+        <div class="metric"><div class="label">Smallest Result Gender Segment</div><div class="value">{{ c.worst_gender.name }}</div></div>
       </div>
 
       <div class="meta">
