@@ -21,7 +21,7 @@ LOW_DATA_MIN_SPEND = 1.0
 
 @app.get("/")
 def root():
-    return {"status": "running", "version": "media-buying-engine-v5-final-consistency"}
+    return {"status": "running", "version": "media-buying-engine-v6-clean-analysis"}
 
 
 def money(v):
@@ -333,13 +333,15 @@ def category_items(creatives, category):
 
 
 def top_items(items, limit=10):
-    items = [c for c in items if c["performance_label"] != "Low Data"]
+    items = [
+        c for c in items
+        if c["performance_label"] not in ["Low Data", "Pause Candidate"]
+    ]
 
     label_rank = {
         "Strong Performer": 5,
         "Good Performer": 4,
         "Needs Optimization": 3,
-        "Pause Candidate": 1,
     }
 
     return sorted(
@@ -421,43 +423,36 @@ def ai_analysis(payload):
     prompt = f"""
 შენ ხარ senior Meta Ads analyst და media buyer.
 
-მკაცრი წესები:
-- ყველა monetary value არის USD-ში.
-- არასოდეს გამოიყენო სიტყვა "ლარი".
-- გამოიყენე მხოლოდ "USD" ან "დოლარი".
-- არ გამოიგონო მონაცემი, პროცენტი, placement, format, video/carousel, behavior assumption.
-- თუ მონაცემი პირდაპირ არ ჩანს payload-ში, არ დაწერო როგორც ფაქტი.
-- თუ აკეთებ ვარაუდს, აუცილებლად დაწერე: "სავარაუდოდ".
-- ROAS არ დაწერო 0-ად, თუ purchase_value_usd ან purchases არ არის.
-- თუ purchases = 0, დაწერე: "ROAS არ არის დათვლადი, რადგან purchase data არ ფიქსირდება."
-- არ შეადარო Engagement results და Message results როგორც ერთნაირი შედეგი.
-- Low Data creatives-ზე არ გასცე მკაცრი pause/reduce რეკომენდაცია.
-- არ გამოიყენო ქულა/score.
-- performance_label არის ground truth. არ გადაარქვა creative-ს status.
-- თუ creative-ს performance_label არის "Good Performer", არ უწოდო "Needs Optimization".
-- თუ creative-ს performance_label არის "Needs Optimization", არ უწოდო "Strong Performer".
-- "Strong performers" სექციაში ახსენე მხოლოდ performance_label == "Strong Performer".
-- "Good performers" შეგიძლია ცალკე ახსენო როგორც stable/testing candidates.
-- არ გამოიყენო ზოგადი რეკომენდაცია, რომელიც მონაცემიდან არ გამომდინარეობს.
+შენი ამოცანაა რეპორტის ზუსტი ანალიზი:
+- სწორად გაარჩიე Engagement და Messages.
+- არ აურიო სხვადასხვა result category ერთმანეთში.
+- creative-ს status აიღე payload-იდან და არ გადაარქვა.
+- Low Data creative არ შეაფასო როგორც სუსტი ან ძლიერი.
+- Pause Candidate ცალკე ახსენე, Needs Optimization ცალკე.
+- თანხები არის USD-ში.
+- არ ახსენო ლარი.
+- არ გამოიგონო placement, format, targeting ან პროცენტი, თუ მონაცემში არ ჩანს.
+- audience ნაწილში დაწერე როგორც შედეგების განაწილება, არა როგორც დადასტურებული targeting strategy.
+- მთავარი აქცენტი გააკეთე ზუსტ დაჯგუფებაზე, CPR-ზე, result volume-ზე, spend efficiency-ზე და next action-ზე.
 
 მონაცემები:
 {json.dumps(payload, ensure_ascii=False, indent=2)}
 
-დაწერე ქართულად, მოკლედ და action-oriented.
+დაწერე ქართულად, მკაფიოდ და პრაქტიკულად.
 
 სტრუქტურა:
 1. Executive Summary
-2. KPI შეფასება USD-ში
-3. Engagement creatives analysis
-4. Message creatives analysis
-5. Strong performers
-6. Good / stable performers
-7. Pause / optimization candidates
-8. Low data creatives
-9. Audience insights — მხოლოდ არსებული მონაცემებით
-10. Budget recommendation
-11. მომდევნო თვის action plan
-12. 5 კონკრეტული რეკომენდაცია
+2. KPI Summary
+3. Engagement Analysis
+4. Message Analysis
+5. Strong Performers
+6. Good / Stable Performers
+7. Needs Optimization
+8. Pause Candidates
+9. Low Data Creatives
+10. Audience Distribution
+11. Budget Actions
+12. Next Month Action Plan
 """
 
     try:
@@ -467,10 +462,9 @@ def ai_analysis(payload):
                 {
                     "role": "system",
                     "content": (
-                        "You are a strict senior paid media analyst. "
-                        "Use only the provided data. All currency is USD. "
-                        "Never invent facts, placements, formats, percentages, scores, or labels. "
-                        "Creative performance_label values are ground truth and must not be contradicted."
+                        "You are a senior paid media analyst. "
+                        "Focus on accurate grouping, metric interpretation, and practical actions. "
+                        "Use only provided data. All currency is USD."
                     )
                 },
                 {"role": "user", "content": prompt}
