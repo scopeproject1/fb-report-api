@@ -21,7 +21,7 @@ LOW_DATA_MIN_SPEND = 1.0
 
 @app.get("/")
 def root():
-    return {"status": "running", "version": "media-buying-engine-v4-ranking-fix"}
+    return {"status": "running", "version": "media-buying-engine-v5-final-consistency"}
 
 
 def money(v):
@@ -131,7 +131,6 @@ def sum_by_column(rows, group_col, value_col="Results"):
         key = clean_text(row.get(group_col, ""))
         if not key:
             continue
-
         value = row.get(value_col, 0) or 0
         result[key] = result.get(key, 0) + float(value)
 
@@ -334,11 +333,12 @@ def category_items(creatives, category):
 
 
 def top_items(items, limit=10):
+    items = [c for c in items if c["performance_label"] != "Low Data"]
+
     label_rank = {
         "Strong Performer": 5,
         "Good Performer": 4,
         "Needs Optimization": 3,
-        "Low Data": 2,
         "Pause Candidate": 1,
     }
 
@@ -358,7 +358,6 @@ def weak_items(items, limit=10):
     filtered = [
         c for c in items
         if c["performance_label"] in ["Pause Candidate", "Needs Optimization"]
-        and c["performance_label"] != "Low Data"
         and c["spent"] >= 1
     ]
 
@@ -410,6 +409,14 @@ def result_category_breakdown(creatives):
     return sorted(output, key=lambda x: x["results"], reverse=True)
 
 
+def label_counts(creatives):
+    counts = {}
+    for c in creatives:
+        label = c["performance_label"]
+        counts[label] = counts.get(label, 0) + 1
+    return counts
+
+
 def ai_analysis(payload):
     prompt = f"""
 შენ ხარ senior Meta Ads analyst და media buyer.
@@ -426,6 +433,11 @@ def ai_analysis(payload):
 - არ შეადარო Engagement results და Message results როგორც ერთნაირი შედეგი.
 - Low Data creatives-ზე არ გასცე მკაცრი pause/reduce რეკომენდაცია.
 - არ გამოიყენო ქულა/score.
+- performance_label არის ground truth. არ გადაარქვა creative-ს status.
+- თუ creative-ს performance_label არის "Good Performer", არ უწოდო "Needs Optimization".
+- თუ creative-ს performance_label არის "Needs Optimization", არ უწოდო "Strong Performer".
+- "Strong performers" სექციაში ახსენე მხოლოდ performance_label == "Strong Performer".
+- "Good performers" შეგიძლია ცალკე ახსენო როგორც stable/testing candidates.
 - არ გამოიყენო ზოგადი რეკომენდაცია, რომელიც მონაცემიდან არ გამომდინარეობს.
 
 მონაცემები:
@@ -439,12 +451,13 @@ def ai_analysis(payload):
 3. Engagement creatives analysis
 4. Message creatives analysis
 5. Strong performers
-6. Pause / optimization candidates
-7. Low data creatives
-8. Audience insights — მხოლოდ არსებული მონაცემებით
-9. Budget recommendation
-10. მომდევნო თვის action plan
-11. 5 კონკრეტული რეკომენდაცია
+6. Good / stable performers
+7. Pause / optimization candidates
+8. Low data creatives
+9. Audience insights — მხოლოდ არსებული მონაცემებით
+10. Budget recommendation
+11. მომდევნო თვის action plan
+12. 5 კონკრეტული რეკომენდაცია
 """
 
     try:
@@ -456,12 +469,13 @@ def ai_analysis(payload):
                     "content": (
                         "You are a strict senior paid media analyst. "
                         "Use only the provided data. All currency is USD. "
-                        "Never invent facts, placements, formats, percentages, or scores."
+                        "Never invent facts, placements, formats, percentages, scores, or labels. "
+                        "Creative performance_label values are ground truth and must not be contradicted."
                     )
                 },
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.1
+            temperature=0.05
         )
         return res.choices[0].message.content
     except Exception as e:
@@ -531,7 +545,12 @@ async def process_report(
 
     strong_creatives = [
         c for c in creatives
-        if c["performance_label"] in ["Strong Performer", "Good Performer"]
+        if c["performance_label"] == "Strong Performer"
+    ]
+
+    good_creatives = [
+        c for c in creatives
+        if c["performance_label"] == "Good Performer"
     ]
 
     pause_candidates = [
@@ -564,12 +583,14 @@ async def process_report(
             "raw_rows": len(df),
             "creative_count": len(creatives),
         },
+        "label_counts": label_counts(creatives),
         "category_totals": category_totals,
         "result_category_breakdown": category_breakdown,
         "top_engagement_creatives": engagement_creatives,
         "top_message_creatives": message_creatives,
         "top_purchase_creatives": purchase_creatives,
         "strong_creatives": strong_creatives[:10],
+        "good_creatives": good_creatives[:10],
         "weak_creatives": weak_creatives,
         "pause_candidates": pause_candidates[:10],
         "low_data_creatives": low_data_creatives,
