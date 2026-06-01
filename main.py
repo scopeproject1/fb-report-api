@@ -497,6 +497,9 @@ Important rules:
 - Never call report cards or creatives "campaigns". If using category counts, write "creatives" or "report cards".
 - The category_totals creative_count/report_card_count fields are not campaign counts.
 - Do not make behavioral audience claims such as men/women being more active or targeting should focus on a gender.
+- Do not turn audience distribution into audience effectiveness. Never write that a gender/age segment has better results, performs better, or deserves more attention because of distribution share.
+- Correct wording: "Messages შედეგების განაწილებაში female სეგმენტზე მოდის 55.8%. ეს არ წარმოადგენს აუდიტორიის ეფექტურობის დადასტურებას."
+- Budget Actions and Next Month Action Plan must not recommend budget shifts based on gender/age distribution alone.
 - Audience wording must describe result distribution only. Use phrasing like:
   "ამ მონაცემებში male სეგმენტზე მოდის შედეგების ყველაზე დიდი წილი."
   "მოცემულ creatives-ში female სეგმენტი ჩანს best gender-ად."
@@ -517,6 +520,11 @@ Important rules:
   "4,197 / 4,607 = 91.1% of all results" and
   "4,197 / 4,512 = 93.0% of engagement results."
   Do not say 91.1% of the engagement category.
+- If top creative share is very high, explicitly mention single creative dependency risk:
+  "Results are heavily dependent on a single creative. Testing additional variations is recommended to reduce concentration risk."
+- Do not compare Engagement CPR and Message CPR as if they were the same business metric. Discuss weak/optimization creatives within their own result category.
+- In Needs Optimization and Pause Candidates sections, group creatives by result category before discussing CPR or spend.
+- Do not calculate or discuss Avg CPR across all results. Use only Avg Cost / Engagement and Avg Cost / Message.
 - If ROAS is null, write exactly:
   "ROAS is not calculated because purchase data is not available."
 
@@ -553,6 +561,8 @@ Required output structure:
                         "Do not invent targeting, formats, placements, percentages, or labels. "
                         "Never call creatives or report cards campaigns. "
                         "Do not use Low Data audience percentages. "
+                        "Do not infer audience effectiveness from audience distribution. "
+                        "Do not discuss average CPR across all result categories. "
                         "Write naturally and concisely in Georgian."
                     )
                 },
@@ -621,7 +631,6 @@ async def process_report(
     total_messaging = int(safe_sum(df, "Messaging conversations started"))
     total_purchase_value = round(safe_sum(df, "Purchases conversion value"), 2)
 
-    avg_cpr = round(total_spent / total_results, 4) if total_results else None
     avg_cpm = round((total_spent / total_impressions) * 1000, 2) if total_impressions else None
     avg_frequency = round(total_impressions / total_summed_reach, 2) if total_summed_reach else None
     total_roas = round(total_purchase_value / total_spent, 2) if total_purchases and total_purchase_value and total_spent else None
@@ -629,7 +638,8 @@ async def process_report(
     engagement_share_of_all_results = safe_share(category_totals["ENGAGEMENT"]["results"], total_results)
     message_share_of_all_results = safe_share(category_totals["MESSAGES"]["results"], total_results)
 
-    weak_creatives = weak_items(creatives, 10)
+    weak_engagement_creatives = weak_items(engagement_creatives_all, 10)
+    weak_message_creatives = weak_items(message_creatives_all, 10)
     low_data_creatives = low_data_items(creatives, 10)
 
     strong_creatives = [
@@ -642,15 +652,27 @@ async def process_report(
         if c["performance_label"] == "Good Performer"
     ]
 
-    needs_optimization = [
-        c for c in creatives
-        if c["performance_label"] == "Needs Optimization"
-    ]
+    needs_optimization_by_category = {
+        "ENGAGEMENT": [
+            c for c in engagement_creatives_all
+            if c["performance_label"] == "Needs Optimization"
+        ][:10],
+        "MESSAGES": [
+            c for c in message_creatives_all
+            if c["performance_label"] == "Needs Optimization"
+        ][:10],
+    }
 
-    pause_candidates = [
-        c for c in creatives
-        if c["performance_label"] == "Pause Candidate"
-    ]
+    pause_candidates_by_category = {
+        "ENGAGEMENT": [
+            c for c in engagement_creatives_all
+            if c["performance_label"] == "Pause Candidate"
+        ][:10],
+        "MESSAGES": [
+            c for c in message_creatives_all
+            if c["performance_label"] == "Pause Candidate"
+        ][:10],
+    }
 
     category_breakdown = result_category_breakdown(creatives)
     concentration = creative_concentration(creatives, total_results, category_totals)
@@ -672,7 +694,6 @@ async def process_report(
             "purchases": total_purchases,
             "messaging_conversations": total_messaging,
             "purchase_value_usd": total_purchase_value,
-            "avg_cpr_usd_all_results": avg_cpr,
             "avg_cost_per_engagement_usd": category_totals["ENGAGEMENT"]["avg_cpr_usd"],
             "avg_cost_per_message_usd": category_totals["MESSAGES"]["avg_cpr_usd"],
             "avg_cpm_usd": avg_cpm,
@@ -691,9 +712,10 @@ async def process_report(
         "top_purchase_creatives": purchase_creatives,
         "strong_creatives": strong_creatives[:10],
         "good_creatives": good_creatives[:10],
-        "needs_optimization": needs_optimization[:10],
-        "weak_creatives": weak_creatives,
-        "pause_candidates": pause_candidates[:10],
+        "needs_optimization_by_category": needs_optimization_by_category,
+        "weak_engagement_creatives": weak_engagement_creatives,
+        "weak_message_creatives": weak_message_creatives,
+        "pause_candidates_by_category": pause_candidates_by_category,
         "low_data_creatives": [without_audience_fields(c) for c in low_data_creatives],
         "age_breakdown": breakdown(df, "Age"),
         "gender_breakdown": breakdown(df, "Gender"),
@@ -743,7 +765,6 @@ async def process_report(
             "purchases": total_purchases,
             "messaging_conversations": total_messaging,
             "purchase_value": total_purchase_value,
-            "avg_cpr": avg_cpr,
             "avg_cpm": avg_cpm,
             "avg_frequency": avg_frequency,
             "roas": total_roas,
@@ -756,7 +777,8 @@ async def process_report(
         top_engagement_creatives=engagement_creatives,
         top_message_creatives=message_creatives,
         top_purchase_creatives=purchase_creatives,
-        weak_creatives=weak_creatives,
+        weak_engagement_creatives=weak_engagement_creatives,
+        weak_message_creatives=weak_message_creatives,
         low_data_creatives=low_data_creatives,
         age_breakdown=payload["age_breakdown"],
         gender_breakdown=payload["gender_breakdown"],

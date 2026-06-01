@@ -336,7 +336,7 @@ h3 { font-size: 17px; margin: 0 0 10px; }
     <div>Category</div>
     <div>Results</div>
     <div>Spend</div>
-    <div>Avg CPR</div>
+    <div>Category Avg CPR</div>
   </div>
 
   {% for item in category_breakdown %}
@@ -542,14 +542,16 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 </section>
 
 <section class="page">
-  <h2>Weak / Optimization Candidates</h2>
+  <h2>Optimization Candidates</h2>
 
-  {% for c in weak_creatives %}
+  <h3>Weak Engagement Creatives</h3>
+
+  {% for c in weak_engagement_creatives %}
   <div class="card">
     <div class="visual weak">
       <div>
-        <div class="id">W{{ "%02d"|format(loop.index) }}</div>
-        <div class="type">Optimization Candidate</div>
+        <div class="id">WE{{ "%02d"|format(loop.index) }}</div>
+        <div class="type">Engagement Optimization</div>
       </div>
 
       <div class="name">{{ c.ad_name }}</div>
@@ -582,6 +584,79 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 
         <div class="metric">
           <div class="label">CPR</div>
+          <div class="value">{{ money(c.cpr) }}</div>
+        </div>
+
+        <div class="metric">
+          <div class="label">Summed Reach</div>
+          <div class="value">{{ num(c.reach) }}</div>
+        </div>
+
+        <div class="metric">
+          <div class="label">Impressions</div>
+          <div class="value">{{ num(c.impressions) }}</div>
+        </div>
+
+        <div class="metric">
+          <div class="label">Frequency</div>
+          <div class="value">{{ c.frequency or "-" }}</div>
+        </div>
+
+        <div class="metric">
+          <div class="label">Fatigue Risk</div>
+          <div class="value">{{ c.fatigue_risk }}</div>
+        </div>
+      </div>
+
+      <div class="meta">
+        Campaign: {{ c.campaign_name }}<br>
+        Result type: {{ c.result_type }}<br>
+        Raw rows merged: {{ c.raw_rows }}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  <h3 style="margin-top:24px;">Weak Message Creatives</h3>
+
+  {% for c in weak_message_creatives %}
+  <div class="card">
+    <div class="visual weak">
+      <div>
+        <div class="id">WM{{ "%02d"|format(loop.index) }}</div>
+        <div class="type">Message Optimization</div>
+      </div>
+
+      <div class="name">{{ c.ad_name }}</div>
+
+      <div class="status">
+        {{ c.performance_label }}<br>
+        {{ c.efficiency_tier }}<br>
+        {{ c.budget_recommendation }}
+      </div>
+    </div>
+
+    <div>
+      <h3>{{ c.ad_name }}</h3>
+
+      <div class="metrics">
+        <div class="metric">
+          <div class="label">Category</div>
+          <div class="value">{{ c.result_category }}</div>
+        </div>
+
+        <div class="metric">
+          <div class="label">Messages</div>
+          <div class="value">{{ num(c.results) }}</div>
+        </div>
+
+        <div class="metric">
+          <div class="label">Spend</div>
+          <div class="value">{{ money(c.spent) }}</div>
+        </div>
+
+        <div class="metric">
+          <div class="label">Cost / Message</div>
           <div class="value">{{ money(c.cpr) }}</div>
         </div>
 
