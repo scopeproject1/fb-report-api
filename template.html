@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ka">
 <head>
 <meta charset="UTF-8" />
@@ -259,12 +259,12 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 
     <div class="kpi">
       <div class="label">Avg Cost / Engagement</div>
-      <div class="value">{{ money(totals.avg_cost_per_engagement) }}</div>
+      <div class="value">{{ cost(totals.avg_cost_per_engagement) }}</div>
     </div>
 
     <div class="kpi">
       <div class="label">Avg Cost / Message</div>
-      <div class="value">{{ money(totals.avg_cost_per_message) }}</div>
+      <div class="value">{{ cost(totals.avg_cost_per_message) }}</div>
     </div>
 
     <div class="kpi">
@@ -344,7 +344,7 @@ h3 { font-size: 17px; margin: 0 0 10px; }
     <div>{{ item.name }}</div>
     <div>{{ num(item.results) }}</div>
     <div>{{ money(item.spend_usd) }}</div>
-    <div>{{ money(item.avg_cpr_usd) }}</div>
+    <div>{{ cost(item.avg_cpr_usd) }}</div>
   </div>
   {% endfor %}
 </section>
@@ -385,7 +385,7 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 
         <div class="metric">
           <div class="label">CPR</div>
-          <div class="value">{{ money(c.cpr) }}</div>
+          <div class="value">{{ cost(c.cpr) }}</div>
         </div>
 
         <div class="metric">
@@ -481,7 +481,7 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 
         <div class="metric">
           <div class="label">Cost / Message</div>
-          <div class="value">{{ money(c.cpr) }}</div>
+          <div class="value">{{ cost(c.cpr) }}</div>
         </div>
 
         <div class="metric">
@@ -584,7 +584,7 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 
         <div class="metric">
           <div class="label">CPR</div>
-          <div class="value">{{ money(c.cpr) }}</div>
+          <div class="value">{{ cost(c.cpr) }}</div>
         </div>
 
         <div class="metric">
@@ -657,7 +657,7 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 
         <div class="metric">
           <div class="label">Cost / Message</div>
-          <div class="value">{{ money(c.cpr) }}</div>
+          <div class="value">{{ cost(c.cpr) }}</div>
         </div>
 
         <div class="metric">
@@ -735,7 +735,7 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 
         <div class="metric">
           <div class="label">CPR</div>
-          <div class="value">{{ money(c.cpr) }}</div>
+          <div class="value">{{ cost(c.cpr) }}</div>
         </div>
       </div>
 
@@ -792,3 +792,4 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 
 </body>
 </html>
+

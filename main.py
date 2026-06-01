@@ -29,11 +29,18 @@ def money(v):
         return "-"
     try:
         value = float(v)
-        if 0 < value < 0.01:
-            return "<$0.01"
         return f"${value:,.2f}"
     except Exception:
         return "$0.00"
+
+
+def cost(v):
+    if v is None:
+        return "-"
+    try:
+        return f"${float(v):,.4f}"
+    except Exception:
+        return "$0.0000"
 
 
 def num(v):
@@ -213,7 +220,10 @@ def classify_creative(category, results, spent, cpr, cpm, frequency):
     if category == "ENGAGEMENT":
         if results >= 1000 and cpr is not None and cpr <= 0.02:
             return "Strong Performer", "Efficient", "Increase budget cautiously", fatigue_risk
-        if cpr is not None and cpr <= 0.05:
+        if cpr is not None and (
+            (results >= 150 and cpr <= 0.07)
+            or (results >= 50 and cpr <= 0.05)
+        ):
             return "Good Performer", "Efficient", "Maintain budget and test variations", fatigue_risk
         if cpr is not None and cpr <= 0.10:
             return "Needs Optimization", "Moderate", "Keep limited budget and improve creative", fatigue_risk
@@ -222,7 +232,7 @@ def classify_creative(category, results, spent, cpr, cpm, frequency):
         return "Needs Optimization", "Moderate", "Keep limited budget and improve creative", fatigue_risk
 
     if category == "MESSAGES":
-        if results >= 10 and cpr is not None and cpr <= 0.40:
+        if results >= 15 and cpr is not None and cpr <= 0.40:
             return "Strong Performer", "Efficient", "Increase budget cautiously", fatigue_risk
         if results >= 4 and cpr is not None and cpr <= 0.60:
             return "Good Performer", "Balanced", "Maintain budget and test variations", fatigue_risk
@@ -505,9 +515,8 @@ Important rules:
   "მოცემულ creatives-ში female სეგმენტი ჩანს best gender-ად."
   "This is result distribution, not confirmed targeting performance."
 - Do not generalize a single creative's best_age/best_gender or creative-level audience share to the whole result category.
-- For Message Analysis, only use total Message category audience percentages from category_audience_breakdowns.MESSAGES.
-- If a filtered Message category audience breakdown is not available, write only that "ზოგიერთ message creative-ში female/male სეგმენტი best gender-ად ჩანს" based on creative-level fields.
-- When category_audience_breakdowns.MESSAGES is provided, use it for total Message audience distribution. Do not use a single message creative's best_gender percentage as the total Message category percentage.
+- Do not write category-level gender or age percentages for Engagement or Messages. Mention only overall audience distribution from top-level age_breakdown/gender_breakdown, or qualitative creative-level observations without percentages.
+- For Message Analysis, do not write "female/male represents X% of Message results". If needed, write only that "ზოგიერთ message creative-ში female/male სეგმენტი best gender-ად ჩანს" and add that this is not audience effectiveness.
 - Do not write audience percentages for Low Data creatives. Low Data audience observations must stay qualitative or be omitted.
 - Low Data creatives must appear only in the Low Data Creatives section and must not be called weak, strong, underperforming, or a pause recommendation.
 - Top performer sections exclude Low Data and Pause Candidate creatives.
@@ -603,9 +612,6 @@ async def process_report(
 
     for col in numeric_cols:
         df = to_number(df, col)
-
-    df_with_category = df.copy()
-    df_with_category["_result_category"] = df_with_category.apply(detect_result_category, axis=1)
 
     creatives = build_creatives(df)
 
@@ -719,24 +725,6 @@ async def process_report(
         "low_data_creatives": [without_audience_fields(c) for c in low_data_creatives],
         "age_breakdown": breakdown(df, "Age"),
         "gender_breakdown": breakdown(df, "Gender"),
-        "category_audience_breakdowns": {
-            "ENGAGEMENT": {
-                "age_breakdown": breakdown(
-                    df_with_category[df_with_category["_result_category"] == "ENGAGEMENT"], "Age"
-                ),
-                "gender_breakdown": breakdown(
-                    df_with_category[df_with_category["_result_category"] == "ENGAGEMENT"], "Gender"
-                ),
-            },
-            "MESSAGES": {
-                "age_breakdown": breakdown(
-                    df_with_category[df_with_category["_result_category"] == "MESSAGES"], "Age"
-                ),
-                "gender_breakdown": breakdown(
-                    df_with_category[df_with_category["_result_category"] == "MESSAGES"], "Gender"
-                ),
-            },
-        },
     }
 
     ai_text = ai_analysis(payload)
@@ -785,6 +773,7 @@ async def process_report(
         category_breakdown=category_breakdown,
         ai_text=ai_text,
         money=money,
+        cost=cost,
         num=num,
         pct=pct,
         roas_value=roas_value,
