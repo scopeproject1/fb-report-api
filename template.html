@@ -379,65 +379,18 @@ h3 { font-size: 17px; margin: 0 0 10px; }
       <h3>{{ c.ad_name }}</h3>
 
       <div class="metrics">
-        <div class="metric">
-          <div class="label">Results</div>
-          <div class="value">{{ num(c.results) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Spend</div>
-          <div class="value">{{ money(c.spent) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">CPR</div>
-          <div class="value">{{ cost(c.cpr) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Summed Reach</div>
-          <div class="value">{{ num(c.reach) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Impressions</div>
-          <div class="value">{{ num(c.impressions) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">CPM</div>
-          <div class="value">{{ money(c.cpm) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Estimated Frequency</div>
-          <div class="value">{{ c.estimated_frequency or c.frequency or "-" }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Fatigue Risk</div>
-          <div class="value">{{ c.fatigue_risk }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Best Age</div>
-          <div class="value">{{ c.best_age.name }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Best Gender</div>
-          <div class="value">{{ c.best_gender.name }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Lowest Age</div>
-          <div class="value">{{ c.worst_age.name }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Lowest Gender</div>
-          <div class="value">{{ c.worst_gender.name }}</div>
-        </div>
+        <div class="metric"><div class="label">Results</div><div class="value">{{ num(c.results) }}</div></div>
+        <div class="metric"><div class="label">Spend</div><div class="value">{{ money(c.spent) }}</div></div>
+        <div class="metric"><div class="label">CPR</div><div class="value">{{ cost(c.cpr) }}</div></div>
+        <div class="metric"><div class="label">Summed Reach</div><div class="value">{{ num(c.reach) }}</div></div>
+        <div class="metric"><div class="label">Impressions</div><div class="value">{{ num(c.impressions) }}</div></div>
+        <div class="metric"><div class="label">CPM</div><div class="value">{{ money(c.cpm) }}</div></div>
+        <div class="metric"><div class="label">Estimated Frequency</div><div class="value">{{ c.estimated_frequency or c.frequency or "-" }}</div></div>
+        <div class="metric"><div class="label">Fatigue Risk</div><div class="value">{{ c.fatigue_risk }}</div></div>
+        <div class="metric"><div class="label">Best Age</div><div class="value">{{ c.best_age.name }}</div></div>
+        <div class="metric"><div class="label">Best Gender</div><div class="value">{{ c.best_gender.name }}</div></div>
+        <div class="metric"><div class="label">Lowest Age</div><div class="value">{{ c.worst_age.name }}</div></div>
+        <div class="metric"><div class="label">Lowest Gender</div><div class="value">{{ c.worst_gender.name }}</div></div>
       </div>
 
       <div class="meta">
@@ -475,65 +428,18 @@ h3 { font-size: 17px; margin: 0 0 10px; }
       <h3>{{ c.ad_name }}</h3>
 
       <div class="metrics">
-        <div class="metric">
-          <div class="label">Messages</div>
-          <div class="value">{{ num(c.results) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Spend</div>
-          <div class="value">{{ money(c.spent) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Cost / Message</div>
-          <div class="value">{{ cost(c.cpr) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Summed Reach</div>
-          <div class="value">{{ num(c.reach) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Impressions</div>
-          <div class="value">{{ num(c.impressions) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">CPM</div>
-          <div class="value">{{ money(c.cpm) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Estimated Frequency</div>
-          <div class="value">{{ c.estimated_frequency or c.frequency or "-" }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Fatigue Risk</div>
-          <div class="value">{{ c.fatigue_risk }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Best Age</div>
-          <div class="value">{{ c.best_age.name }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Best Gender</div>
-          <div class="value">{{ c.best_gender.name }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Lowest Age</div>
-          <div class="value">{{ c.worst_age.name }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Lowest Gender</div>
-          <div class="value">{{ c.worst_gender.name }}</div>
-        </div>
+        <div class="metric"><div class="label">Messages</div><div class="value">{{ num(c.results) }}</div></div>
+        <div class="metric"><div class="label">Spend</div><div class="value">{{ money(c.spent) }}</div></div>
+        <div class="metric"><div class="label">Cost / Message</div><div class="value">{{ cost(c.cpr) }}</div></div>
+        <div class="metric"><div class="label">Summed Reach</div><div class="value">{{ num(c.reach) }}</div></div>
+        <div class="metric"><div class="label">Impressions</div><div class="value">{{ num(c.impressions) }}</div></div>
+        <div class="metric"><div class="label">CPM</div><div class="value">{{ money(c.cpm) }}</div></div>
+        <div class="metric"><div class="label">Estimated Frequency</div><div class="value">{{ c.estimated_frequency or c.frequency or "-" }}</div></div>
+        <div class="metric"><div class="label">Fatigue Risk</div><div class="value">{{ c.fatigue_risk }}</div></div>
+        <div class="metric"><div class="label">Best Age</div><div class="value">{{ c.best_age.name }}</div></div>
+        <div class="metric"><div class="label">Best Gender</div><div class="value">{{ c.best_gender.name }}</div></div>
+        <div class="metric"><div class="label">Lowest Age</div><div class="value">{{ c.worst_age.name }}</div></div>
+        <div class="metric"><div class="label">Lowest Gender</div><div class="value">{{ c.worst_gender.name }}</div></div>
       </div>
 
       <div class="meta">
@@ -573,45 +479,14 @@ h3 { font-size: 17px; margin: 0 0 10px; }
       <h3>{{ c.ad_name }}</h3>
 
       <div class="metrics">
-        <div class="metric">
-          <div class="label">Category</div>
-          <div class="value">{{ c.result_category }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Results</div>
-          <div class="value">{{ num(c.results) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Spend</div>
-          <div class="value">{{ money(c.spent) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">CPR</div>
-          <div class="value">{{ cost(c.cpr) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Summed Reach</div>
-          <div class="value">{{ num(c.reach) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Impressions</div>
-          <div class="value">{{ num(c.impressions) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Estimated Frequency</div>
-          <div class="value">{{ c.estimated_frequency or c.frequency or "-" }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Fatigue Risk</div>
-          <div class="value">{{ c.fatigue_risk }}</div>
-        </div>
+        <div class="metric"><div class="label">Category</div><div class="value">{{ c.result_category }}</div></div>
+        <div class="metric"><div class="label">Results</div><div class="value">{{ num(c.results) }}</div></div>
+        <div class="metric"><div class="label">Spend</div><div class="value">{{ money(c.spent) }}</div></div>
+        <div class="metric"><div class="label">CPR</div><div class="value">{{ cost(c.cpr) }}</div></div>
+        <div class="metric"><div class="label">Summed Reach</div><div class="value">{{ num(c.reach) }}</div></div>
+        <div class="metric"><div class="label">Impressions</div><div class="value">{{ num(c.impressions) }}</div></div>
+        <div class="metric"><div class="label">Estimated Frequency</div><div class="value">{{ c.estimated_frequency or c.frequency or "-" }}</div></div>
+        <div class="metric"><div class="label">Fatigue Risk</div><div class="value">{{ c.fatigue_risk }}</div></div>
       </div>
 
       <div class="meta">
@@ -646,45 +521,14 @@ h3 { font-size: 17px; margin: 0 0 10px; }
       <h3>{{ c.ad_name }}</h3>
 
       <div class="metrics">
-        <div class="metric">
-          <div class="label">Category</div>
-          <div class="value">{{ c.result_category }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Messages</div>
-          <div class="value">{{ num(c.results) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Spend</div>
-          <div class="value">{{ money(c.spent) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Cost / Message</div>
-          <div class="value">{{ cost(c.cpr) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Summed Reach</div>
-          <div class="value">{{ num(c.reach) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Impressions</div>
-          <div class="value">{{ num(c.impressions) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Estimated Frequency</div>
-          <div class="value">{{ c.estimated_frequency or c.frequency or "-" }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Fatigue Risk</div>
-          <div class="value">{{ c.fatigue_risk }}</div>
-        </div>
+        <div class="metric"><div class="label">Category</div><div class="value">{{ c.result_category }}</div></div>
+        <div class="metric"><div class="label">Messages</div><div class="value">{{ num(c.results) }}</div></div>
+        <div class="metric"><div class="label">Spend</div><div class="value">{{ money(c.spent) }}</div></div>
+        <div class="metric"><div class="label">Cost / Message</div><div class="value">{{ cost(c.cpr) }}</div></div>
+        <div class="metric"><div class="label">Summed Reach</div><div class="value">{{ num(c.reach) }}</div></div>
+        <div class="metric"><div class="label">Impressions</div><div class="value">{{ num(c.impressions) }}</div></div>
+        <div class="metric"><div class="label">Estimated Frequency</div><div class="value">{{ c.estimated_frequency or c.frequency or "-" }}</div></div>
+        <div class="metric"><div class="label">Fatigue Risk</div><div class="value">{{ c.fatigue_risk }}</div></div>
       </div>
 
       <div class="meta">
@@ -724,25 +568,10 @@ h3 { font-size: 17px; margin: 0 0 10px; }
       <h3>{{ c.ad_name }}</h3>
 
       <div class="metrics">
-        <div class="metric">
-          <div class="label">Category</div>
-          <div class="value">{{ c.result_category }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Results</div>
-          <div class="value">{{ num(c.results) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">Spend</div>
-          <div class="value">{{ money(c.spent) }}</div>
-        </div>
-
-        <div class="metric">
-          <div class="label">CPR</div>
-          <div class="value">{{ cost(c.cpr) }}</div>
-        </div>
+        <div class="metric"><div class="label">Category</div><div class="value">{{ c.result_category }}</div></div>
+        <div class="metric"><div class="label">Results</div><div class="value">{{ num(c.results) }}</div></div>
+        <div class="metric"><div class="label">Spend</div><div class="value">{{ money(c.spent) }}</div></div>
+        <div class="metric"><div class="label">CPR</div><div class="value">{{ cost(c.cpr) }}</div></div>
       </div>
 
       <div class="meta">
@@ -755,7 +584,12 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 </section>
 
 <section class="page">
-  <h2>Audience Insights</h2>
+  <h2>Audience Distribution</h2>
+
+  <p class="note">
+    Audience distribution describes where results were recorded.
+    It does not indicate audience quality, effectiveness, or future targeting recommendations.
+  </p>
 
   <div class="split">
     <div>
