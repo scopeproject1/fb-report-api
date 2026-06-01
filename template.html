@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ka">
 <head>
 <meta charset="UTF-8" />
@@ -283,8 +283,8 @@ h3 { font-size: 17px; margin: 0 0 10px; }
     </div>
 
     <div class="kpi">
-      <div class="label">Frequency</div>
-      <div class="value">{{ totals.avg_frequency or "-" }}</div>
+      <div class="label">Estimated Frequency</div>
+      <div class="value">{{ totals.estimated_frequency or "-" }}</div>
     </div>
 
     <div class="kpi">
@@ -308,6 +308,11 @@ h3 { font-size: 17px; margin: 0 0 10px; }
     </div>
 
     <div class="kpi">
+      <div class="label">Concentration Risk</div>
+      <div class="value">{{ totals.concentration_risk or "-" }}</div>
+    </div>
+
+    <div class="kpi">
       <div class="label">Purchases</div>
       <div class="value">{{ num(totals.purchases) }}</div>
     </div>
@@ -320,6 +325,7 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 
   <p class="note">
     Summed Reach is calculated from breakdown rows and is not guaranteed to represent unique reach.
+    Estimated Frequency is calculated from summed breakdown-row reach and impressions.
     Engagement and messaging results are analyzed separately because they represent different objectives and optimization logic.
   </p>
 </section>
@@ -404,8 +410,8 @@ h3 { font-size: 17px; margin: 0 0 10px; }
         </div>
 
         <div class="metric">
-          <div class="label">Frequency</div>
-          <div class="value">{{ c.frequency or "-" }}</div>
+          <div class="label">Estimated Frequency</div>
+          <div class="value">{{ c.estimated_frequency or c.frequency or "-" }}</div>
         </div>
 
         <div class="metric">
@@ -500,8 +506,8 @@ h3 { font-size: 17px; margin: 0 0 10px; }
         </div>
 
         <div class="metric">
-          <div class="label">Frequency</div>
-          <div class="value">{{ c.frequency or "-" }}</div>
+          <div class="label">Estimated Frequency</div>
+          <div class="value">{{ c.estimated_frequency or c.frequency or "-" }}</div>
         </div>
 
         <div class="metric">
@@ -598,8 +604,8 @@ h3 { font-size: 17px; margin: 0 0 10px; }
         </div>
 
         <div class="metric">
-          <div class="label">Frequency</div>
-          <div class="value">{{ c.frequency or "-" }}</div>
+          <div class="label">Estimated Frequency</div>
+          <div class="value">{{ c.estimated_frequency or c.frequency or "-" }}</div>
         </div>
 
         <div class="metric">
@@ -671,8 +677,8 @@ h3 { font-size: 17px; margin: 0 0 10px; }
         </div>
 
         <div class="metric">
-          <div class="label">Frequency</div>
-          <div class="value">{{ c.frequency or "-" }}</div>
+          <div class="label">Estimated Frequency</div>
+          <div class="value">{{ c.estimated_frequency or c.frequency or "-" }}</div>
         </div>
 
         <div class="metric">
@@ -792,4 +798,3 @@ h3 { font-size: 17px; margin: 0 0 10px; }
 
 </body>
 </html>
-
